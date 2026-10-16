@@ -1,0 +1,19 @@
+memora:
+  security:
+    jwt-secret: test-secret-test-secret-test-secret-0123
+  seed:
+    enabled: true
+  handoff:
+    lease-seconds: 300
+    recovery-interval-ms: 3600000
+  test:
+    clean-db: true
+
+spring:
+  flyway:
+    clean-disabled: false
+
+logging:
+  level:
+    memora.access: WARN
+    com.memora: INFO
