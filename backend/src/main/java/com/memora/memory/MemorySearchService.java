@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.memora.memory.MemoryDtos.MemoryView;
 import com.memora.memory.MemoryDtos.SourceView;
+import com.memora.project.ProjectService;
 import com.memora.security.Actor;
 import java.sql.Array;
 import java.sql.ResultSet;
@@ -36,10 +37,12 @@ public class MemorySearchService {
 
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
+    private final ProjectService projects;
 
-    public MemorySearchService(NamedParameterJdbcTemplate jdbc, ObjectMapper objectMapper) {
+    public MemorySearchService(NamedParameterJdbcTemplate jdbc, ObjectMapper objectMapper, ProjectService projects) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
+        this.projects = projects;
     }
 
     public record SearchResult(List<MemoryView> items, long total, int limit, int offset, String tsQuery) {
@@ -47,6 +50,8 @@ public class MemorySearchService {
 
     @Transactional(readOnly = true)
     public SearchResult search(Actor actor, MemoryQuery query) {
+        // A project filter from another tenant is a 404, the same answer as reading that project directly.
+        projects.requireInTenant(actor, query.projectId());
         String tsQuery = toTsQuery(query.q(), query.matchAll());
         boolean hasText = query.q() != null && !query.q().isBlank();
         MapSqlParameterSource p = new MapSqlParameterSource()

@@ -68,6 +68,7 @@ public class TaskService {
 
     @Transactional(readOnly = true)
     public PageResponse<TaskView> list(Actor actor, UUID projectId, TaskStatus status, UUID assignee, int page, int size) {
+        projects.requireInTenant(actor, projectId);
         return PageResponse.of(tasks.search(actor.tenantId(), projectId, status, assignee, PageRequest.of(page, size)),
                 TaskView::of);
     }

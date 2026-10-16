@@ -89,6 +89,11 @@ class TenantIsolationIT extends IntegrationTest {
         Response ctx = bob.post("/api/v1/context", Map.of("query", "Atlas roadmap launch"));
         assertThat(ctx.text("rendered")).doesNotContain("Acme");
         assertThat(bob.post("/api/v1/context", Map.of("taskId", acmeTask)).status()).isEqualTo(404);
+        // Filtering by another tenant's project id is a 404, not an empty (or tenant-wide) result.
+        assertThat(bob.get("/api/v1/memories?projectId=" + acmeProject).status()).isEqualTo(404);
+        assertThat(bob.get("/api/v1/tasks?projectId=" + acmeProject).status()).isEqualTo(404);
+        assertThat(bob.get("/api/v1/conversations?projectId=" + acmeProject).status()).isEqualTo(404);
+        assertThat(bob.post("/api/v1/context", Map.of("projectId", acmeProject)).status()).isEqualTo(404);
         // Seeded data really is different per tenant (other tests may add demo projects, so look at the seeded ones).
         assertThat(bob.get("/api/v1/memories?q=database&projectId=" + projectId(bob, "pulse")).body().findValuesAsText("value"))
                 .contains("mongodb").doesNotContain("postgresql");

@@ -150,7 +150,7 @@ public class DemoSeeder {
     private static String note(String email) {
         return switch (email) {
             case "alice@acme.test" -> "Acme admin: sees all Acme data";
-            case "aaron@acme.test" -> "Acme member: sees only his own conversations and personal memories";
+            case "aaron@acme.test" -> "Acme member: sees only their own conversations and personal memories";
             case "bob@globex.test" -> "Globex admin: completely separate data";
             default -> "Member of both tenants; switch tenants to see each one separately";
         };

@@ -60,6 +60,7 @@ public class ConversationService {
 
     @Transactional(readOnly = true)
     public PageResponse<ConversationView> list(Actor actor, UUID projectId, Boolean mine, int page, int size) {
+        projects.requireInTenant(actor, projectId);
         UUID ownerFilter = !actor.seesAllUserData() || Boolean.TRUE.equals(mine) ? actor.userId() : null;
         return PageResponse.of(conversations.search(actor.tenantId(), projectId, ownerFilter, PageRequest.of(page, size)),
                 ConversationView::of);
