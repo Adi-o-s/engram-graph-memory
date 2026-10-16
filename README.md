@@ -105,3 +105,11 @@ curl -s localhost:8080/api/v1/memories -H "X-Agent-Key: $KEY" -H 'Content-Type: 
 curl -s -X POST localhost:8080/api/v1/context -H "X-Agent-Key: $KEY" -H 'Content-Type: application/json' \
   -d '{"query":"deploy","maxChars":2000}' | jq -r .rendered
 ```
+
+## Your own agent flow
+
+The guided demo's agents are built in. To run a flow with an agent you registered yourself, see
+[scripts/reviewer-flow.sh](scripts/reviewer-flow.sh): a Developer hands a task to a custom "Reviewer" agent,
+which acknowledges it with its own key, reads context, records findings and hands the task back. Each step is one
+API call, so it doubles as a template. Run it with `REVIEWER_KEY=mem_... scripts/reviewer-flow.sh` (add `STEP=1`
+to pause after each step), then watch the result in Tasks & handoffs.
