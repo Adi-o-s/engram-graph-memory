@@ -25,7 +25,7 @@ docker compose up --build
 ```
 
 The first build downloads Maven and npm dependencies, so it needs internet access once. When the
-`frontend` container starts, open http://localhost:3000 and sign in as `alice@acme.test` / `memora-demo`.
+`frontend` container starts, open http://localhost:3000 on that same machine (nothing is hosted online; the link only works while the stack is running) and sign in as `alice@acme.test` / `memora-demo`.
 
 Stop with `Ctrl+C` or `docker compose down`. Data survives in the `memora-pgdata` volume.
 `docker compose down -v` (or `scripts/reset-db.sh docker`) deletes it.
@@ -95,6 +95,7 @@ Playwright uses its own Chromium. If it is not installed, run `npx playwright in
 
 | Symptom | Fix |
 |---|---|
+| `localhost:3000` does not open at all ("site can't be reached") | The stack is not running on this machine. Run `docker compose up --build` and wait for the `frontend` container to start. Check with `docker compose ps` |
 | `Cannot reach the Memora backend` in the dashboard | Start the backend; check http://localhost:8080/actuator/health |
 | Everyone is signed out after a backend restart | Set `MEMORA_JWT_SECRET` to a fixed value |
 | Overview says row-level security is **Off** | The app connects as a superuser. Use the `memora` role created by the setup script |

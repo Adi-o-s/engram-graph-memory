@@ -26,6 +26,8 @@ cp .env.example .env
 docker compose up --build
 ```
 
+> Nothing is hosted online. These `localhost` links only open on the machine where `docker compose up` is running.
+
 - Dashboard: http://localhost:3000
 - API: http://localhost:8080 · Swagger UI: http://localhost:8080/swagger-ui.html · Health: http://localhost:8080/actuator/health
 
