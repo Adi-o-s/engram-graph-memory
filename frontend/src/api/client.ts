@@ -82,7 +82,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     const error = new ApiError(
       response.status,
       String(problem.code ?? 'http_' + response.status),
-      String(problem.detail ?? problem.message ?? response.statusText ?? 'Request failed'),
+      String(problem.detail || problem.message || (typeof data === 'string' && data.length < 200 ? data : '') || response.statusText || `Request failed with HTTP ${response.status}`),
       (problem.correlationId as string | undefined) ?? response.headers.get('X-Correlation-Id') ?? undefined,
       problem,
     )
