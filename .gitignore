@@ -1,0 +1,31 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Java / Maven
+target/
+*.class
+*.log
+hs_err_pid*
+
+# Node / frontend
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Local data
+data/
+pgdata/
+load-test-results/*.json
