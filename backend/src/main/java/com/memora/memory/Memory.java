@@ -40,6 +40,12 @@ public class Memory extends BaseEntity {
     @Column(name = "agent_id", updatable = false)
     private UUID agentId;
 
+    @Column(name = "workflow_id", updatable = false)
+    private UUID workflowId;
+
+    @Column(name = "workflow_run_id", updatable = false)
+    private UUID workflowRunId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "memory_type", nullable = false, updatable = false)
     private MemoryType type;
@@ -168,6 +174,10 @@ public class Memory extends BaseEntity {
     void setConversationId(UUID conversationId) { this.conversationId = conversationId; }
     void setTaskId(UUID taskId) { this.taskId = taskId; }
     void setAgentId(UUID agentId) { this.agentId = agentId; }
+    void setWorkflow(UUID workflowId, UUID workflowRunId) {
+        this.workflowId = workflowId;
+        this.workflowRunId = workflowRunId;
+    }
     void setCategory(String category) { this.category = category; }
     void setFact(String subject, String predicate, String objectValue, String factKey) {
         this.subject = subject;
@@ -198,6 +208,8 @@ public class Memory extends BaseEntity {
     public UUID getTenantId() { return tenantId; }
     public UUID getUserId() { return userId; }
     public UUID getProjectId() { return projectId; }
+    public UUID getWorkflowId() { return workflowId; }
+    public UUID getWorkflowRunId() { return workflowRunId; }
     public UUID getConversationId() { return conversationId; }
     public UUID getTaskId() { return taskId; }
     public UUID getAgentId() { return agentId; }

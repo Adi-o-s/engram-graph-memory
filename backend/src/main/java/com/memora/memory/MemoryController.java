@@ -54,7 +54,7 @@ public class MemoryController {
         MemoryDraft draft = MemoryDraft.builder(r.type(), r.content())
                 .category(r.category())
                 .fact(r.subject(), r.predicate(), r.value())
-                .scope(r.scope())
+                .scope(r.scope(), r.scopeRef())
                 .project(r.projectId()).conversation(r.conversationId()).task(r.taskId())
                 .tags(r.tags()).importance(r.importance()).confidence(r.confidence()).expiresAt(r.expiresAt())
                 .metadata(r.metadata())

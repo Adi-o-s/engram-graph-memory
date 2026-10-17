@@ -60,6 +60,11 @@ public class Agent extends BaseEntity {
         this.capabilities = capabilities == null ? new String[0] : capabilities;
     }
 
+    /** Agent definitions keep their principal's name in sync when they are renamed. */
+    public void rename(String name) {
+        this.name = name;
+    }
+
     public void setApiKey(String hash, String prefix) {
         this.apiKeyHash = hash;
         this.apiKeyPrefix = prefix;

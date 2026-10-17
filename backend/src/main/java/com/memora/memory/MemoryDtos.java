@@ -24,7 +24,7 @@ public final class MemoryDtos {
             String subject, String predicate, String objectValue,
             MemoryScope scope, UUID projectId, UUID conversationId, UUID taskId, UUID agentId,
             List<String> tags, Integer importance, Double confidence, Instant expiresAt, Map<String, Object> metadata,
-            SourceType sourceType, UUID sourceMessageId, String sourceRef, String extractor) {
+            SourceType sourceType, UUID sourceMessageId, String sourceRef, String extractor, UUID scopeRef) {
 
         public boolean isFact() {
             return subject != null && !subject.isBlank() && predicate != null && !predicate.isBlank();
@@ -55,6 +55,7 @@ public final class MemoryDtos {
             private UUID sourceMessageId;
             private String sourceRef;
             private String extractor;
+            private UUID scopeRef;
 
             private Builder(MemoryType type, String content) {
                 this.type = type;
@@ -69,6 +70,8 @@ public final class MemoryDtos {
                 return this;
             }
             public Builder scope(MemoryScope v) { this.scope = v; return this; }
+            /** The workflow, run or agent id for WORKFLOW, RUN and AGENT scopes. */
+            public Builder scope(MemoryScope v, UUID ref) { this.scope = v; this.scopeRef = ref; return this; }
             public Builder project(UUID v) { this.projectId = v; return this; }
             public Builder conversation(UUID v) { this.conversationId = v; return this; }
             public Builder task(UUID v) { this.taskId = v; return this; }
@@ -89,7 +92,7 @@ public final class MemoryDtos {
             public MemoryDraft build() {
                 return new MemoryDraft(type, category, content, subject, predicate, objectValue, scope, projectId,
                         conversationId, taskId, agentId, tags, importance, confidence, expiresAt, metadata,
-                        sourceType, sourceMessageId, sourceRef, extractor);
+                        sourceType, sourceMessageId, sourceRef, extractor, scopeRef);
             }
         }
     }
@@ -102,6 +105,7 @@ public final class MemoryDtos {
             @Size(max = 200) String predicate,
             @Size(max = 500) String value,
             MemoryScope scope,
+            UUID scopeRef,
             UUID projectId,
             UUID conversationId,
             UUID taskId,
@@ -151,7 +155,8 @@ public final class MemoryDtos {
             MemoryScope scope, String scopeKey, UUID userId, UUID projectId, UUID conversationId, UUID taskId, UUID agentId,
             List<String> tags, int importance, double confidence, MemoryStatus status, int version, Long lockVersion,
             UUID supersedesId, UUID supersededById, SourceView source, long accessCount, Instant lastAccessedAt,
-            Instant expiresAt, Map<String, Object> metadata, Instant createdAt, Instant updatedAt, Double score) {
+            Instant expiresAt, Map<String, Object> metadata, Instant createdAt, Instant updatedAt, Double score,
+            UUID workflowId, UUID workflowRunId) {
 
         public static MemoryView of(Memory m) {
             return new MemoryView(m.getId(), m.getType(), m.getCategory(), m.getContent(), m.getSubject(),
@@ -162,14 +167,25 @@ public final class MemoryDtos {
                     new SourceView(m.getSourceType(), m.getSourceMessageId(), m.getSourceRef(), m.getExtractor(),
                             m.getCreatedByUserId(), m.getCreatedByAgentId()),
                     m.getAccessCount(), m.getLastAccessedAt(), m.getExpiresAt(), m.getMetadata(), m.getCreatedAt(),
-                    m.getUpdatedAt(), null);
+                    m.getUpdatedAt(), null, m.getWorkflowId(), m.getWorkflowRunId());
         }
 
-        static MemoryScope scopeOf(String scopeKey) {
-            if (scopeKey.startsWith("user:")) {
-                return MemoryScope.USER;
-            }
-            return scopeKey.startsWith("project:") ? MemoryScope.PROJECT : MemoryScope.TENANT;
+        public static MemoryScope scopeOf(String scopeKey) {
+            int colon = scopeKey.indexOf(':');
+            return switch (colon < 0 ? scopeKey : scopeKey.substring(0, colon)) {
+                case "user" -> MemoryScope.USER;
+                case "project" -> MemoryScope.PROJECT;
+                case "workflow" -> MemoryScope.WORKFLOW;
+                case "run" -> MemoryScope.RUN;
+                case "agent" -> MemoryScope.AGENT;
+                default -> MemoryScope.TENANT;
+            };
+        }
+
+        /** The id inside a scope key ({@code run:<id>} etc.), or null for the tenant scope. */
+        public static java.util.UUID scopeRefOf(String scopeKey) {
+            int colon = scopeKey.indexOf(':');
+            return colon < 0 ? null : java.util.UUID.fromString(scopeKey.substring(colon + 1));
         }
     }
 

@@ -54,6 +54,22 @@ memora:
   lab:
     max-threads: 64
     max-operations: 20000
+  workflow:
+    # Database-backed scheduler: claims READY steps with SELECT ... FOR UPDATE SKIP LOCKED.
+    scheduler-enabled: ${MEMORA_WORKFLOW_SCHEDULER_ENABLED:true}
+    workers: ${MEMORA_WORKFLOW_WORKERS:4}
+    poll-interval-ms: ${MEMORA_WORKFLOW_POLL_INTERVAL_MS:400}
+    recovery-interval-ms: 5000
+    lease-grace-seconds: 30
+    # Requeue steps left RUNNING by a previous process at startup. Correct for one backend instance;
+    # set to false when running several instances (lease expiry still recovers them).
+    recover-on-startup: ${MEMORA_WORKFLOW_RECOVER_ON_STARTUP:true}
+    max-pacing-ms: 5000
+  workspace:
+    # Optional: a directory agents may read with workspace.* tools (read-only). Empty disables those tools.
+    root: ${MEMORA_WORKSPACE_ROOT:}
+    command-timeout-seconds: 120
+    # Allow-listed commands for command.run, e.g. commands.unit-tests: ["./mvnw", "-q", "test"]. None by default.
 
 management:
   endpoints:

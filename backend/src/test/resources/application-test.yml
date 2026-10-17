@@ -8,6 +8,12 @@ memora:
     recovery-interval-ms: 3600000
   test:
     clean-db: true
+  workflow:
+    poll-interval-ms: 100
+    recovery-interval-ms: 1000
+    # Several application contexts can share the test database; startup recovery would steal another
+    # context's running steps. Recovery is tested explicitly instead.
+    recover-on-startup: false
 
 spring:
   flyway:

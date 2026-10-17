@@ -67,6 +67,7 @@ public class DemoSeeder {
     }
 
     @EventListener(ApplicationReadyEvent.class)
+    @org.springframework.core.annotation.Order(org.springframework.core.Ordered.HIGHEST_PRECEDENCE + 10)
     public void seed() {
         if (!properties.enabled()) {
             return;
