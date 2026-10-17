@@ -432,7 +432,7 @@ public class AgentTemplates {
                 behavior(l(
                         op("themes", "text.keywords", m("texts", "${input.sources}", "top", 8)),
                         forEach("evidence", "memory.search", "${input.questions}", m("query", "${item.feature}",
-                                "types", l("SEMANTIC", "EPISODIC"), "scopes", l("PROJECT", "TENANT"), "limit", 5)),
+                                "types", l("SEMANTIC", "EPISODIC"), "scopes", l("PROJECT"), "limit", 5)),
                         op("supported", "data.select", m("rows", "${ops.evidence}", "where", m("path", "row.count", "op", "gt", "value", 0))),
                         op("doc", "document.compose", m("title", "Findings", "sections", l(
                                 m("heading", "Evidence by question", "items", "${ops.evidence}",
