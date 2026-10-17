@@ -329,7 +329,7 @@ public class WorkflowEngine {
             List<StepRun> all = steps.findByTenantIdAndRunIdOrderByCreatedAtAscIterationAsc(tenantId, run.getId());
             Map<String, Object> view = view(run, all);
             Map<String, Object> input = Expressions.resolveMap(stepSpec.inputs() == null ? Map.of() : stepSpec.inputs(), view);
-            step.setInput(input);
+            step.setInput(Redaction.map(input));
             Map<String, Object> stepView = Json.map("key", step.getStepKey(), "name", step.getName(), "iteration",
                     step.getIteration(), "attempt", step.getAttempts(), "id", step.getId().toString());
             view.put("input", input);
@@ -406,7 +406,7 @@ public class WorkflowEngine {
                 return;
             }
             case SUCCEEDED -> {
-                Map<String, Object> output = outcome.output() == null ? Map.of() : outcome.output();
+                Map<String, Object> output = outcome.output() == null ? Map.of() : Redaction.map(outcome.output());
                 if (stepSpec.loop() != null) {
                     Map<String, Object> loopView = view(run, all);
                     loopView.put("output", output);
@@ -464,7 +464,7 @@ public class WorkflowEngine {
                     m.add(Mirror.Kind.ATTEMPT_FAILED, step, outcome.error());
                 } else {
                     String kind = retryable ? "RETRIES_EXHAUSTED" : "PERMANENT";
-                    step.markFailed(outcome.error(), kind, outcome.output());
+                    step.markFailed(outcome.error(), kind, Redaction.map(outcome.output()));
                     events.append(run.getTenantId(), run.getId(), step.getId(), "step_failed",
                             step.getName() + " failed" + (retryable ? " after " + step.getAttempts() + " attempt(s)" : " (not retryable)")
                                     + ": " + outcome.error(), Json.map("attempts", step.getAttempts(), "kind", kind));
@@ -862,7 +862,7 @@ public class WorkflowEngine {
                     : StepOutcome.succeeded(output == null ? Map.of() : output, List.of("Reported by " + actor.name()));
             events.append(run.getTenantId(), run.getId(), step.getId(), "external_result", step.getName() + " result reported by "
                     + actor.name(), Json.map("by", actor.name(), "succeeded", error == null || error.isBlank()));
-            record(run, step, outcome, m);
+            record(run, step, checkOutput(agent, outcome), m);
         });
     }
 
@@ -892,7 +892,7 @@ public class WorkflowEngine {
             }
             events.append(tenantId, run.getId(), step.getId(), "external_result",
                     step.getName() + " reported through its handoff (" + status + ")", Json.map("handoffId", handoffId.toString()));
-            record(run, step, outcome, m);
+            record(run, step, checkOutput(agents(run).get(step.getAgentKey()), outcome), m);
         });
         mirror.apply(m);
     }
@@ -913,6 +913,17 @@ public class WorkflowEngine {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /** External results are held to the same output schema as Memora's own executors. */
+    private static StepOutcome checkOutput(AgentSnapshot agent, StepOutcome outcome) {
+        if (outcome.status() != StepOutcome.Status.SUCCEEDED) {
+            return outcome;
+        }
+        List<String> errors = com.memora.orchestration.expr.MiniSchema.validate(agent.outputSchema(), outcome.output());
+        return errors.isEmpty() ? outcome : new StepOutcome(StepOutcome.Status.FAILED, outcome.output(),
+                StepOutcome.FailureKind.PERMANENT, "Reported output does not match " + agent.key() + "'s output schema: "
+                + String.join("; ", errors), outcome.log());
+    }
 
     private UUID runIdOf(UUID tenantId, UUID stepRunId) {
         List<UUID> ids = jdbc.queryForList("SELECT run_id FROM workflow_step_runs WHERE tenant_id = ? AND id = ?",

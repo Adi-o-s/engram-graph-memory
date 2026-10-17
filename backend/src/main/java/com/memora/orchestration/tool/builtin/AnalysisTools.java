@@ -370,6 +370,37 @@ public final class AnalysisTools {
     }
 
     @Component
+    public static class CoalesceTool implements Tool {
+
+        @Override
+        public ToolDescriptor descriptor() {
+            return new ToolDescriptor("data.coalesce", "First present value",
+                    "Returns the first value that is not null, blank or an empty list (for example: the project's recorded "
+                            + "choice, else the tenant's, else a default) and its position.",
+                    "data", "analysis", false, false, 1000,
+                    object(req("values"), "values", anyArray("Candidates in order of preference", 50)),
+                    object(req("value")), List.of("Pure function"), "Returns null when every candidate is empty", true, null);
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public Map<String, Object> invoke(ToolContext ctx, Map<String, Object> args) {
+            int i = 0;
+            for (Object v : (Collection<Object>) args.get("values")) {
+                boolean empty = v == null || (v instanceof String s && s.isBlank()) || (v instanceof Collection<?> c && c.isEmpty());
+                if (!empty) {
+                    return Json.map("value", v, "index", i);
+                }
+                i++;
+            }
+            Map<String, Object> none = new LinkedHashMap<>();
+            none.put("value", null);
+            none.put("index", -1);
+            return none;
+        }
+    }
+
+    @Component
     public static class JoinTool implements Tool {
 
         @Override

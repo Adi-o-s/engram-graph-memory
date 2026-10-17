@@ -20,7 +20,7 @@ public final class RequirementExtractor {
 
     private static final Pattern LEAD = Pattern.compile(
             "(?i)^\\s*(?:please\\s+)?(?:i\\s+(?:want|need)\\s+(?:you\\s+)?to\\s+|we\\s+(?:want|need)\\s+to\\s+)?"
-                    + "(build|create|develop|make|design|write|produce|prepare|research|analy[sz]e|plan|launch|run|implement|set up|draft|compile|investigate|review|compare)\\s+"
+                    + "(build|create|develop|make|design|write|produce|prepare|research|analy[sz]e|plan|launch|run|implement|set up|draft|compile|investigate|review|compare|organi[sz]e|host|automate|migrate)\\s+"
                     + "(?:(?:a|an|the|our|my)\\s+)?(.+?)\\s+(with|that|which|including|featuring|covering|about|on|for|to)\\s+(.+)$");
     private static final Pattern BULLET = Pattern.compile("^\\s*(?:[-*•]|\\d+[.)])\\s+(.+)$");
     private static final Pattern SPLIT = Pattern.compile("\\s*(?:,|;|\\band also\\b|\\bas well as\\b|\\bplus\\b|\\band\\b)\\s*", Pattern.CASE_INSENSITIVE);
@@ -175,10 +175,12 @@ public final class RequirementExtractor {
                 if (parts.size() > 1) {
                     parts.forEach(p -> features.add(new String[]{p, priorityOf(body)}));
                 } else if (!parts.isEmpty()) {
-                    features.add(new String[]{parts.get(0), priorityOf(body)});
+                    // A lone fragment such as "Hello" is not a requirement; it is reported as unclear instead.
+                    features.add(new String[]{parts.get(0), priorityOf(body), parts.get(0).split("\\s+").length < 3 ? "fragment" : ""});
                 }
             }
         }
+        boolean subjectFromLead = subject != null;
         if (subject == null && !sentences.isEmpty()) {
             subject = tidy(sentences.get(0).replaceAll("[.!?]+$", ""));
             if (subject.split("\\s+").length > 8) {
@@ -196,7 +198,8 @@ public final class RequirementExtractor {
                 continue;
             }
             String lower = feature.toLowerCase(Locale.ROOT);
-            if (VAGUE.stream().anyMatch(lower::contains) || lower.split("\\s+").length == 1 && lower.length() < 4) {
+            if (VAGUE.stream().anyMatch(lower::contains) || lower.split("\\s+").length == 1 && lower.length() < 4
+                    || f.length > 2 && "fragment".equals(f[2])) {
                 unclear.add(feature);
                 continue;
             }
@@ -208,7 +211,7 @@ public final class RequirementExtractor {
             categories.add(category);
             String id = "R" + (requirements.size() + 1);
             String statement = MODAL.matcher(feature).find() ? capitalize(feature)
-                    : "The " + (subject == null ? "deliverable" : stripArticles(subject)) + " must provide " + feature + ".";
+                    : "The " + (subject == null || !subjectFromLead ? "deliverable" : stripArticles(subject)) + " must provide " + feature + ".";
             List<String> acceptance = ACCEPTANCE.getOrDefault(category, ACCEPTANCE.get("general")).stream()
                     .map(a -> a.contains("%s") ? String.format(a, feature) : a).toList();
             requirements.add(new Requirement(id, statement.endsWith(".") ? statement : statement + ".", feature, category, f[1],

@@ -113,20 +113,25 @@ public class AgentTemplates {
                 "Maps requirements to API capabilities, a data model and cross-cutting approaches; records architecture decisions.",
                 "Prefer decisions already recorded in shared memory (for example the project's database) over defaults.",
                 caps("memory.read", "memory.write", "analysis", "document", "artifact.write"),
-                tools("memory.search", "data.select", "catalog.match", "document.compose", "artifact.write", "memory.write"),
+                tools("memory.search", "data.select", "data.coalesce", "catalog.match", "document.compose", "artifact.write", "memory.write"),
                 schemaArray("requirements"), outputs("capabilities", "database"),
                 behavior(l(
-                        op("facts", "memory.search", m("query", "database", "types", l("SEMANTIC"), "limit", 20)),
-                        op("db", "data.select", m("rows", "${ops.facts.items}", "where", m("path", "row.predicate", "op", "eq", "value", "uses.database"),
-                                "pluck", "value")),
+                        // The project's own recorded choice wins over a tenant-wide one; PostgreSQL is only the fallback.
+                        op("projectFacts", "memory.search", m("query", "database", "types", l("SEMANTIC"), "scopes", l("PROJECT"), "limit", 20)),
+                        op("projectDb", "data.select", m("rows", "${ops.projectFacts.items}",
+                                "where", m("path", "row.predicate", "op", "eq", "value", "uses.database"), "pluck", "value")),
+                        op("tenantFacts", "memory.search", m("query", "database", "types", l("SEMANTIC"), "scopes", l("TENANT"), "limit", 20)),
+                        op("tenantDb", "data.select", m("rows", "${ops.tenantFacts.items}",
+                                "where", m("path", "row.predicate", "op", "eq", "value", "uses.database"), "pluck", "value")),
+                        op("db", "data.coalesce", m("values", l("${ops.projectDb.values.0}", "${ops.tenantDb.values.0}", "postgresql"))),
                         op("api", "catalog.match", m("items", "${input.requirements}", "catalog", Catalogs.API)),
                         op("cross", "catalog.match", m("items", "${input.requirements}", "catalog", Catalogs.CROSS_CUTTING)),
                         op("contract", "artifact.write", m("name", "api-contract.json", "kind", "json", "content", m(
-                                "style", "REST over JSON", "database", "${ops.db.values.0 | postgresql}",
+                                "style", "REST over JSON", "database", "${ops.db.value}",
                                 "capabilities", "${ops.api.entries}", "crossCutting", "${ops.cross.entries}"))),
                         op("doc", "document.compose", m("title", "Architecture and API contract", "sections", l(
                                 m("heading", "Shape", "body", "A browser client calls a REST API over JSON; the API stores data in "
-                                        + "${ops.db.values.0 | postgresql}. The database comes from shared memory when the project recorded one "
+                                        + "${ops.db.value}. The database comes from shared memory when the project recorded one "
                                         + "(fact uses.database); otherwise PostgreSQL is assumed."),
                                 m("heading", "API by capability", "items", "${ops.api.entries}", "itemTemplate", "**{{title}}** (covers {{covers}}): {{endpoints}}"),
                                 m("heading", "Data model", "items", "${ops.api.entries}", "itemTemplate", "{{title}}: {{entities}}"),
@@ -138,10 +143,10 @@ public class AgentTemplates {
                         op("d1", "memory.write", m("content", "Decision: the API is REST over JSON.", "scope", "PROJECT", "category", "decision",
                                 "subject", "project", "predicate", "architecture.api_style", "value", "rest-json", "importance", 4,
                                 "tags", l("decision", "architecture"))),
-                        op("d2", "memory.write", m("content", "Decision: application data is stored in ${ops.db.values.0 | postgresql}.",
+                        op("d2", "memory.write", m("content", "Decision: application data is stored in ${ops.db.value}.",
                                 "scope", "PROJECT", "category", "decision", "subject", "project", "predicate", "architecture.database",
-                                "value", "${ops.db.values.0 | postgresql}", "importance", 4, "tags", l("decision", "database")))),
-                        m("database", "${ops.db.values.0 | postgresql}", "capabilities", "${ops.api.entries}",
+                                "value", "${ops.db.value}", "importance", 4, "tags", l("decision", "database")))),
+                        m("database", "${ops.db.value}", "capabilities", "${ops.api.entries}",
                                 "crossCutting", "${ops.cross.entries}", "unmapped", "${ops.api.unmatched}", "coveredIds", "${ops.api.coveredIds}"),
                         null)));
 
