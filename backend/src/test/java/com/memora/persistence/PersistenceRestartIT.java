@@ -7,6 +7,7 @@ import com.memora.MemoraApplication;
 import com.memora.support.ApiClient;
 import com.memora.support.ApiClient.Response;
 import com.memora.support.TestDatabase;
+import com.memora.support.TestFalkorDB;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -24,7 +25,9 @@ class PersistenceRestartIT {
                         "--memora.test.clean-db=false",
                         "--spring.datasource.url=" + TestDatabase.URL,
                         "--spring.datasource.username=" + TestDatabase.USER,
-                        "--spring.datasource.password=" + TestDatabase.PASSWORD);
+                        "--spring.datasource.password=" + TestDatabase.PASSWORD,
+                        "--memora.graph.host=" + TestFalkorDB.HOST,
+                        "--memora.graph.port=" + TestFalkorDB.PORT);
     }
 
     private static ApiClient login(ConfigurableApplicationContext ctx) {

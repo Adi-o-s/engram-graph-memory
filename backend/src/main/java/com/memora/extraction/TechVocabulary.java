@@ -1,6 +1,8 @@
 package com.memora.extraction;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -10,12 +12,14 @@ import java.util.Optional;
  * the same role. "We use PostgreSQL" and "We use MySQL" conflict because both are databases;
  * "We use PostgreSQL" and "We use React" do not.
  */
-final class TechVocabulary {
+public final class TechVocabulary {
 
-    record Term(String canonical, String display, String category) {
+    public record Term(String canonical, String display, String category) {
     }
 
     private static final Map<String, Term> TERMS = new LinkedHashMap<>();
+    /** Aliases that are ordinary English words; they only count as a mention when written as a fact value. */
+    private static final java.util.Set<String> AMBIGUOUS = java.util.Set.of("go", "express", "linear", "swift", "spring", "rust");
 
     static {
         add("database", "PostgreSQL", "postgresql", "postgres", "postgre sql");
@@ -101,6 +105,37 @@ final class TechVocabulary {
             }
         }
         return Optional.ofNullable(best);
+    }
+
+    /** The term a whole phrase names exactly ("Postgres" -> postgresql), used for graph entity keys. */
+    public static Optional<Term> exact(String phrase) {
+        return phrase == null ? Optional.empty() : Optional.ofNullable(TERMS.get(normalize(phrase)));
+    }
+
+    /** Every known technology mentioned anywhere in a text (1- to 3-word phrases), in order of appearance. */
+    public static List<Term> termsIn(String text) {
+        List<Term> out = new ArrayList<>();
+        if (text == null) {
+            return out;
+        }
+        String[] words = normalize(text).replaceAll("[^a-z0-9#+.\\s-]", " ").split("\\s+");
+        for (int i = 0; i < words.length; i++) {
+            for (int n = 3; n >= 1; n--) {
+                if (i + n > words.length) {
+                    continue;
+                }
+                String phrase = String.join(" ", java.util.Arrays.copyOfRange(words, i, i + n)).replaceAll("[.]+$", "");
+                Term t = AMBIGUOUS.contains(phrase) ? null : TERMS.get(phrase);
+                if (t != null) {
+                    if (!out.contains(t)) {
+                        out.add(t);
+                    }
+                    i += n - 1;
+                    break;
+                }
+            }
+        }
+        return out;
     }
 
     static Optional<String> categoryFromNoun(String noun) {

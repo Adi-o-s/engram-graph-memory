@@ -1,6 +1,8 @@
 package com.memora.context;
 
 import com.memora.conversation.ConversationDtos.MessageView;
+import com.memora.graph.GraphAlerts.Alert;
+import com.memora.graph.GraphPath;
 import com.memora.handoff.HandoffDtos.HandoffView;
 import com.memora.memory.MemoryDtos.MemoryView;
 import com.memora.task.TaskDtos.TaskView;
@@ -8,6 +10,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public final class ContextDtos {
@@ -24,8 +27,13 @@ public final class ContextDtos {
                                int messagesOmitted, boolean truncated) {
     }
 
+    /** How graph retrieval reached a memory: the path, its length and the score it earned. */
+    public record ContextPath(GraphPath path, int hops, double score, boolean reached) {
+    }
+
     public record ContextBundle(String query, TaskView task, HandoffView latestHandoff, List<MemoryView> facts,
                                 List<MemoryView> procedures, List<MemoryView> episodes, List<MessageView> messages,
-                                String rendered, ContextStats stats) {
+                                String rendered, ContextStats stats, String retrieval, Map<UUID, ContextPath> paths,
+                                List<Alert> alerts) {
     }
 }

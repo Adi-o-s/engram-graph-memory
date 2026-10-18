@@ -8,6 +8,7 @@ import com.memora.common.Json;
 import com.memora.conversation.Conversation;
 import com.memora.conversation.ConversationService;
 import com.memora.extraction.SensitiveContentGuard;
+import com.memora.graph.GraphOutbox;
 import com.memora.memory.MemoryDtos.HistoryView;
 import com.memora.memory.MemoryDtos.MemoryDraft;
 import com.memora.memory.MemoryDtos.MemoryView;
@@ -66,10 +67,12 @@ public class MemoryService {
     private final AuditService audit;
     private final TransactionTemplate tx;
     private final JdbcTemplate jdbc;
+    private final GraphOutbox graphOutbox;
 
     public MemoryService(MemoryRepository memories, ProjectService projects, ConversationService conversations,
                          TaskService tasks, AgentService agents, AuditService audit, TransactionTemplate tx,
-                         JdbcTemplate jdbc) {
+                         JdbcTemplate jdbc, GraphOutbox graphOutbox) {
+        this.graphOutbox = graphOutbox;
         this.memories = memories;
         this.projects = projects;
         this.conversations = conversations;
@@ -366,11 +369,35 @@ public class MemoryService {
         return found.stream().map(MemoryView::of).toList();
     }
 
+    /** Counts the access and records who read what in the graph outbox (the graph's READ edges). */
     @Transactional
     public void recordAccess(Actor actor, Collection<UUID> ids) {
+        recordAccess(actor, ids, null);
+    }
+
+    @Transactional
+    public void recordAccess(Actor actor, Collection<UUID> ids, UUID stepRunId) {
         if (!ids.isEmpty()) {
             memories.recordAccess(actor.tenantId(), ids);
+            graphOutbox.recordRead(actor, ids, stepRunId);
         }
+    }
+
+    /**
+     * Graph retrieval's security backstop: of the given ids, the CURRENT memories PostgreSQL (with RLS) lets this
+     * caller see, in the given order. Ids the graph returned but the caller may not see are dropped.
+     */
+    @Transactional(readOnly = true)
+    public List<MemoryView> visibleCurrent(Actor actor, List<UUID> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, Memory> found = new HashMap<>();
+        memories.findByTenantIdAndIdIn(actor.tenantId(), new LinkedHashSet<>(ids)).stream()
+                .filter(m -> visible(actor, m) && m.getStatus() == MemoryStatus.CURRENT
+                        && (m.getExpiresAt() == null || m.getExpiresAt().isAfter(java.time.Instant.now())))
+                .forEach(m -> found.put(m.getId(), m));
+        return ids.stream().map(found::get).filter(java.util.Objects::nonNull).distinct().map(MemoryView::of).toList();
     }
 
     Memory requireVisible(Actor actor, UUID id) {
