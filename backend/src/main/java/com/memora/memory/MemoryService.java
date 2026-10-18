@@ -109,16 +109,52 @@ public class MemoryService {
                 throw ApiException.badRequest("conversationId belongs to a different project");
             }
         }
+        MemoryScope scope = resolveScope(draft.scope(), projectId);
+        UUID workflowId = null;
+        UUID workflowRunId = null;
+        if (scope.needsRef()) {
+            UUID ref = draft.scopeRef();
+            if (ref == null) {
+                throw ApiException.badRequest(scope + " scope needs a scopeRef (the " + scope.name().toLowerCase(Locale.ROOT) + " id)");
+            }
+            switch (scope) {
+                case RUN -> {
+                    List<Map<String, Object>> run = jdbc.queryForList(
+                            "SELECT project_id, workflow_id FROM workflow_runs WHERE tenant_id = ? AND id = ?", actor.tenantId(), ref);
+                    if (run.isEmpty()) {
+                        throw ApiException.notFound("Workflow run", ref);
+                    }
+                    UUID runProject = (UUID) run.get(0).get("project_id");
+                    if (projectId == null) {
+                        projectId = runProject;
+                    } else if (!projectId.equals(runProject)) {
+                        throw ApiException.badRequest("The workflow run belongs to a different project");
+                    }
+                    workflowRunId = ref;
+                    workflowId = (UUID) run.get(0).get("workflow_id");
+                }
+                case WORKFLOW -> {
+                    Integer n = jdbc.queryForObject("SELECT count(*) FROM workflow_definitions WHERE tenant_id = ? AND id = ?",
+                            Integer.class, actor.tenantId(), ref);
+                    if (n == null || n == 0) {
+                        throw ApiException.notFound("Workflow", ref);
+                    }
+                    workflowId = ref;
+                }
+                default -> agents.require(actor, ref);
+            }
+        }
         projects.requireInTenant(actor, projectId);
         tasks.requireExists(actor, draft.taskId());
         if (draft.agentId() != null) {
             agents.require(actor, draft.agentId());
         }
-        MemoryScope scope = resolveScope(draft.scope(), projectId);
         if (scope == MemoryScope.USER && !actor.isUser()) {
             throw ApiException.badRequest("USER-scoped memories must be written by the user they belong to");
         }
-        String scopeKey = scopeKey(actor, scope, projectId);
+        String scopeKey = scopeKey(actor, scope, projectId, draft.scopeRef());
+        final UUID wfId = workflowId;
+        final UUID wfRunId = workflowRunId;
 
         if (draft.isFact()) {
             String factKey = factKey(draft.subject(), draft.predicate());
@@ -138,6 +174,7 @@ public class MemoryService {
                 return new MemoryWriteResult(MemoryView.of(existing), WriteOutcome.DUPLICATE, null);
             }
             Memory fresh = build(actor, draft, scope, scopeKey, projectId, key);
+            fresh.setWorkflow(wfId, wfRunId);
             fresh.setFact(clean(draft.subject()), clean(draft.predicate()), value, factKey);
             if (current.isPresent()) {
                 Memory previous = current.get();
@@ -169,6 +206,7 @@ public class MemoryService {
             return new MemoryWriteResult(MemoryView.of(same.get(0)), WriteOutcome.DUPLICATE, null);
         }
         Memory fresh = build(actor, draft, scope, scopeKey, projectId, key);
+        fresh.setWorkflow(wfId, wfRunId);
         memories.save(fresh);
         memories.flush();
         audit.record(actor, "memory.created", "memory", fresh.getId(), Json.map("type", fresh.getType()));
@@ -228,7 +266,8 @@ public class MemoryService {
         }
         MemoryDraft.Builder draft = MemoryDraft.builder(original.getType(), request.content())
                 .category(original.getCategory())
-                .scope(MemoryView.scopeOf(original.getScopeKey()))
+                .scope(MemoryView.scopeOf(original.getScopeKey()), MemoryView.scopeOf(original.getScopeKey()).needsRef()
+                        ? MemoryView.scopeRefOf(original.getScopeKey()) : null)
                 .project(original.getProjectId()).conversation(original.getConversationId()).task(original.getTaskId())
                 .agent(original.getAgentId()).tags(List.of(original.getTags())).importance(original.getImportance())
                 .metadata(metadata)
@@ -246,6 +285,7 @@ public class MemoryService {
             }
             Memory fresh = build(actor, draft.build(), MemoryView.scopeOf(locked.getScopeKey()), locked.getScopeKey(),
                     locked.getProjectId(), null);
+            fresh.setWorkflow(locked.getWorkflowId(), locked.getWorkflowRunId());
             fresh.setRevision(locked.getRevision() + 1);
             fresh.setSupersedesId(locked.getId());
             locked.markSuperseded();
@@ -400,11 +440,14 @@ public class MemoryService {
         return projectId != null ? MemoryScope.PROJECT : MemoryScope.TENANT;
     }
 
-    private static String scopeKey(Actor actor, MemoryScope scope, UUID projectId) {
+    private static String scopeKey(Actor actor, MemoryScope scope, UUID projectId, UUID ref) {
         return switch (scope) {
             case USER -> "user:" + actor.userId();
             case PROJECT -> "project:" + projectId;
             case TENANT -> "tenant";
+            case WORKFLOW -> "workflow:" + ref;
+            case RUN -> "run:" + ref;
+            case AGENT -> "agent:" + ref;
         };
     }
 

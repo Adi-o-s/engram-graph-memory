@@ -11,6 +11,11 @@ import { AgentsPage } from './pages/AgentsPage'
 import { TaskBoardPage } from './pages/TaskBoardPage'
 import { TenantIsolationPage } from './pages/TenantIsolationPage'
 import { ConcurrencyLabPage } from './pages/ConcurrencyLabPage'
+import { PlanPage } from './pages/PlanPage'
+import { RunsPage } from './pages/RunsPage'
+import { WorkflowStudioPage } from './pages/WorkflowStudioPage'
+import { AgentStudioPage } from './pages/AgentStudioPage'
+import { WorkspacePage } from './pages/WorkspacePage'
 
 export function App() {
   const { me, ready } = useAuth()
@@ -20,6 +25,13 @@ export function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<OverviewPage />} />
+        <Route path="plan" element={<PlanPage />} />
+        <Route path="runs" element={<RunsPage />} />
+        <Route path="runs/:runId" element={<RunsPage />} />
+        <Route path="workflows" element={<WorkflowStudioPage />} />
+        <Route path="workflows/:workflowId" element={<WorkflowStudioPage />} />
+        <Route path="agent-studio" element={<AgentStudioPage />} />
+        <Route path="workspace" element={<WorkspacePage />} />
         <Route path="demo" element={<GuidedDemoPage />} />
         <Route path="memories" element={<MemoryExplorerPage />} />
         <Route path="conversations" element={<ConversationsPage />} />

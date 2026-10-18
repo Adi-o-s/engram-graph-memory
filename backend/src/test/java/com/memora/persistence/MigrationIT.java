@@ -30,14 +30,16 @@ class MigrationIT extends IntegrationTest {
         assertThat(applied).isNotEmpty();
         assertThat(applied).allMatch(m -> m.getState() == MigrationState.SUCCESS);
         assertThat(flyway.info().pending()).isEmpty();
-        assertThat(Arrays.stream(applied).map(m -> m.getVersion().getVersion()).toList()).containsExactly("1", "2", "3");
+        assertThat(Arrays.stream(applied).map(m -> m.getVersion().getVersion()).toList()).containsExactly("1", "2", "3", "4");
         flyway.validate();
     }
 
     @Test
     void everyTenantOwnedTableHasForcedRowLevelSecurity() {
         List<String> tables = List.of("memberships", "projects", "agents", "conversations", "messages", "tasks",
-                "task_events", "memories", "handoffs", "audit_events", "lab_runs");
+                "task_events", "memories", "handoffs", "audit_events", "lab_runs", "agent_definitions", "agent_definition_versions",
+                "workflow_definitions", "workflow_definition_versions", "workflow_runs", "workflow_step_runs", "workflow_artifacts",
+                "workflow_events", "workflow_approvals", "tool_invocations");
         for (String table : tables) {
             Boolean forced = jdbc.queryForObject(
                     "SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE relname = ? AND relkind = 'r'",

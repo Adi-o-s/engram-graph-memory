@@ -79,7 +79,9 @@ const statusTones: Record<string, Tone> = {
   PENDING: 'gray', ACKNOWLEDGED: 'blue', COMPLETED: 'green', REJECTED: 'amber', DEAD_LETTER: 'red',
   EPISODIC: 'violet', SEMANTIC: 'indigo', PROCEDURAL: 'blue',
   CREATED: 'green', SUPERSEDED_PREVIOUS: 'amber', DUPLICATE: 'gray', REPLAYED: 'gray',
-  ACTIVE: 'green', DISABLED: 'gray',
+  ACTIVE: 'green', DISABLED: 'gray', INACTIVE: 'gray',
+  READY: 'blue', RUNNING: 'blue', WAITING_APPROVAL: 'amber', SUCCEEDED: 'green', SKIPPED: 'gray', CANCELLED: 'gray',
+  PAUSED: 'amber', APPROVED: 'green', DENIED: 'red',
 }
 
 export function StatusBadge({ value }: { value?: string | null }) {

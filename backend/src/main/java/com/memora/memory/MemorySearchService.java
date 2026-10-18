@@ -84,6 +84,14 @@ public class MemorySearchService {
             where.append(" AND m.conversation_id = :conversationId");
             p.addValue("conversationId", query.conversationId());
         }
+        if (query.runId() != null) {
+            where.append(" AND m.workflow_run_id = :runId");
+            p.addValue("runId", query.runId());
+        }
+        if (query.scopeKeys() != null && !query.scopeKeys().isEmpty()) {
+            where.append(" AND m.scope_key IN (:scopeKeys)");
+            p.addValue("scopeKeys", query.scopeKeys());
+        }
         if (query.taskId() != null) {
             where.append(" AND m.task_id = :taskId");
             p.addValue("taskId", query.taskId());
@@ -188,7 +196,9 @@ public class MemorySearchService {
                 json(rs.getString("metadata_json")),
                 instant(rs.getTimestamp("created_at")),
                 instant(rs.getTimestamp("updated_at")),
-                score == null ? null : Math.round(score * 1000.0) / 1000.0);
+                score == null ? null : Math.round(score * 1000.0) / 1000.0,
+                rs.getObject("workflow_id", UUID.class),
+                rs.getObject("workflow_run_id", UUID.class));
     }
 
     private static List<String> strings(Array array) throws SQLException {

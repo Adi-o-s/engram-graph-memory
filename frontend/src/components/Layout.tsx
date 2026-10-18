@@ -1,15 +1,21 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import {
   LayoutDashboard, PlayCircle, Brain, MessagesSquare, Bot, KanbanSquare, ShieldCheck, Gauge, LogOut, Database,
+  Sparkles, Activity, Workflow, Users, FolderKanban,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { cx } from '../lib/format'
 import { Select } from './ui'
 
-const NAV = [
+const NAV: { to: string; label: string; icon: typeof LayoutDashboard; end?: boolean; group?: string }[] = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
-  { to: '/demo', label: 'Guided demo', icon: PlayCircle },
+  { to: '/plan', label: 'Plan a workflow', icon: Sparkles, group: 'Orchestration' },
+  { to: '/runs', label: 'Workflow runs', icon: Activity },
+  { to: '/workflows', label: 'Workflow studio', icon: Workflow },
+  { to: '/agent-studio', label: 'Agent studio', icon: Users },
+  { to: '/workspace', label: 'Project workspace', icon: FolderKanban },
+  { to: '/demo', label: 'Guided demo (1.0)', icon: PlayCircle, group: 'Memory & coordination' },
   { to: '/memories', label: 'Memory explorer', icon: Brain },
   { to: '/conversations', label: 'Conversations', icon: MessagesSquare },
   { to: '/agents', label: 'Agent workspace', icon: Bot },
@@ -32,11 +38,12 @@ export function Layout() {
           </div>
           <div>
             <div className="text-sm font-semibold text-ink">Memora</div>
-            <div className="text-[11px] text-slate-500">Shared memory for agents</div>
+            <div className="text-[11px] text-slate-500">Memory and orchestration for agents</div>
           </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-2 pb-2 md:flex-col md:overflow-visible">
-          {NAV.map(({ to, label, icon: Icon, end }) => (
+          {NAV.map(({ to, label, icon: Icon, end, group }) => [
+            group && <div key={group} className="hidden px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400 md:block">{group}</div>,
             <NavLink
               key={to}
               to={to}
@@ -50,8 +57,8 @@ export function Layout() {
             >
               <Icon className="h-4 w-4" aria-hidden />
               {label}
-            </NavLink>
-          ))}
+            </NavLink>,
+          ])}
         </nav>
         <div className="mt-auto hidden border-t border-slate-100 p-3 md:block">
           <div className="text-xs text-slate-500">Signed in as</div>

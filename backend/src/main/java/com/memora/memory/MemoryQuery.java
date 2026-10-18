@@ -19,7 +19,9 @@ public record MemoryQuery(
         Sort sort,
         boolean matchAll,
         int limit,
-        int offset) {
+        int offset,
+        UUID runId,
+        List<String> scopeKeys) {
 
     public enum Sort {
         RELEVANCE, RECENT, IMPORTANCE
@@ -45,6 +47,8 @@ public record MemoryQuery(
         private boolean matchAll;
         private int limit = 20;
         private int offset;
+        private UUID runId;
+        private List<String> scopeKeys = List.of();
 
         public Builder q(String v) { this.q = v; return this; }
         public Builder types(List<MemoryType> v) { this.types = v == null ? List.of() : v; return this; }
@@ -62,10 +66,13 @@ public record MemoryQuery(
         public Builder matchAll(boolean v) { this.matchAll = v; return this; }
         public Builder limit(int v) { this.limit = v; return this; }
         public Builder offset(int v) { this.offset = v; return this; }
+        public Builder run(UUID v) { this.runId = v; return this; }
+        /** Restricts results to these exact scope keys (used to enforce an agent's memory policy). */
+        public Builder scopeKeys(List<String> v) { this.scopeKeys = v == null ? List.of() : v; return this; }
 
         public MemoryQuery build() {
             return new MemoryQuery(q, types, includeHistory, projectId, includeShared, conversationId, taskId, agentId,
-                    tags, minImportance, category, sort, matchAll, limit, offset);
+                    tags, minImportance, category, sort, matchAll, limit, offset, runId, scopeKeys);
         }
     }
 }

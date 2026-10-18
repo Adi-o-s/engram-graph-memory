@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -42,10 +43,12 @@ public class HandoffService {
     private final AuditService audit;
     private final HandoffProperties properties;
     private final TransactionTemplate tx;
+    private final ApplicationEventPublisher publisher;
 
     public HandoffService(HandoffRepository handoffs, TaskService tasks, AgentService agents,
                           AgentRepository agentRepository, MemoryService memories, AuditService audit,
-                          HandoffProperties properties, TransactionTemplate tx) {
+                          HandoffProperties properties, TransactionTemplate tx, ApplicationEventPublisher publisher) {
+        this.publisher = publisher;
         this.handoffs = handoffs;
         this.tasks = tasks;
         this.agents = agents;
@@ -153,6 +156,7 @@ public class HandoffService {
         handoffs.flush();
         tasks.recordHandoffEvent(actor, h.getTaskId(), "handoff_completed", Json.map("handoffId", h.getId()));
         audit.record(actor, "handoff.completed", "handoff", h.getId(), Map.of());
+        publisher.publishEvent(new HandoffFinishedEvent(h.getTenantId(), h.getId(), h.getStatus(), result, null));
         return HandoffView.of(h);
     }
 
@@ -165,6 +169,7 @@ public class HandoffService {
         tasks.recordHandoffEvent(actor, h.getTaskId(), "handoff_failed",
                 Json.map("handoffId", h.getId(), "reason", reason, "status", h.getStatus()));
         audit.record(actor, "handoff.failed", "handoff", h.getId(), Json.map("reason", reason, "status", h.getStatus()));
+        publisher.publishEvent(new HandoffFinishedEvent(h.getTenantId(), h.getId(), h.getStatus(), result, reason));
         return HandoffView.of(h);
     }
 
@@ -178,6 +183,7 @@ public class HandoffService {
         handoffs.flush();
         tasks.recordHandoffEvent(actor, h.getTaskId(), "handoff_rejected", Json.map("handoffId", h.getId(), "reason", reason));
         audit.record(actor, "handoff.rejected", "handoff", h.getId(), Json.map("reason", reason));
+        publisher.publishEvent(new HandoffFinishedEvent(h.getTenantId(), h.getId(), h.getStatus(), null, reason));
         return HandoffView.of(h);
     }
 

@@ -55,6 +55,17 @@ Memora work; it does not need one.
 
 Nothing has been deployed anywhere. All verification was local.
 
+## Memora 2.0 orchestration
+
+Re-checked after adding orchestration: **no new runtime dependency** was added to `pom.xml` or `package.json`.
+The workflow engine, scheduler, tool layer, planner, expression language and JSON-schema subset are plain Java on
+the existing Spring Boot and PostgreSQL stack. Scheduling uses PostgreSQL row locks (`FOR UPDATE SKIP LOCKED`),
+not a broker or workflow service. The planner and the built-in executor are rule-based and deterministic; no
+model, embedding service or API key is required at runtime. The optional `external` executor lets an agent you
+already run elsewhere (a person, a script, or an AI coding tool such as Claude Code with its own subscription) do
+a step through its inbox; Memora never calls it. Test-only additions: none to the dependency list (Playwright and
+Vitest were already present).
+
 ## Not used, deliberately
 
 No LLM or embedding API, no vector database, no Redis, Kafka or Kubernetes, no analytics or error-tracking
