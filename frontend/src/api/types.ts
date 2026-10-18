@@ -119,6 +119,7 @@ export interface Explanation {
 }
 export interface GraphNode { key: string; label: string; id: string; name?: string; status?: string; type?: string }
 export interface GraphEdge { from: string; to: string; type: string; predicate?: string; status?: string }
+export interface KeyEntity { key: string; name?: string; score: number; degree: number }
 export interface GraphView { nodes: GraphNode[]; edges: GraphEdge[]; counts: Record<string, number> }
 
 export interface StepResult {

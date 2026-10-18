@@ -29,7 +29,10 @@ CALL db.idx.fulltext.createNodeIndex('Memory', 'content')
 ## Algorithms and what each query is for
 
 Retrieval score (`GraphContextRetriever`): `0.6^hops × importance/5 × confidence × (0.5 + 0.5·e^(−ageDays/30))`;
-a memory reached by several paths keeps its best score; fill-up memories (not reached) are multiplied by `0.6^3`.
+a memory reached by several paths keeps its best score. Full-text hits and fill-up memories (not reached) are
+multiplied by `0.6^3`, so a fact connected by graph edges outranks one that only shares a word with the query.
+(The first retrieval eval run, before this weight existed, showed full-text hits on the word "service" crowding out
+entity hits; see [TEST_RESULTS.md](TEST_RESULTS.md#retrieval-eval-graph-vs-keyword).)
 
 ### Projection (outbox → graph) (`GraphProjection`)
 
@@ -114,6 +117,7 @@ a memory reached by several paths keeps its best score; fill-up memories (not re
 | [`DEPENDENTS`](#dependents) | Tool graph.impact: entities with a current fact pointing at this one (billing-service USES postgresql). |
 | [`IMPACT`](#impact) | Tool graph.impact: memories, tasks, handoffs and runs connected to the entity. |
 | [`RESOLVE`](#resolve) | Graph tools given free text: pick its best-connected known entity. |
+| [`KEY_ENTITIES`](#key_entities) | GET /api/graph/key-entities and the graph page: PageRank (`algo.pageRank`) over Entity-RELATES-Entity, only entities with a CURRENT fact edge are listed. The score itself counts superseded RELATES edges too, because the procedure takes no edge filter. |
 
 ## Catalogue (generated from the code)
 
@@ -795,6 +799,18 @@ RETURN collect(DISTINCT [m.id, m.content]) AS memories,
        collect(DISTINCT [run.id, run.name, run.status]) AS runs
 ```
 
+#### KEY_ENTITIES
+
+```cypher
+CALL algo.pageRank('Entity', 'RELATES') YIELD node, score
+MATCH (node)-[r:RELATES]-(:Entity)
+WHERE r.status = 'CURRENT'
+WITH node, score, count(r) AS degree
+RETURN node.key AS key, node.name AS name, score, degree
+ORDER BY score DESC, degree DESC
+LIMIT $limit
+```
+
 #### RESOLVE
 
 ```cypher
@@ -804,4 +820,3 @@ RETURN e.key AS key, count(r) AS degree
 ORDER BY degree DESC
 LIMIT 1
 ```
-

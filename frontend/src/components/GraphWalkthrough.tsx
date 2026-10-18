@@ -80,9 +80,9 @@ export function GraphWalkthrough() {
         const reviewerAfter = await api.context({ query: TASK, projectId: st.project?.id }, st.reviewerKey)
         setSt((s) => ({ ...s, changed, coderAfter, reviewerAfter }))
       } else if (key === 'tenant') {
-        const acme = await api.graphView(undefined, 2000)
+        const acme = await api.graphView('Entity', 400)
         const bob = await request<LoginResponse>('/api/v1/auth/login', { body: { email: 'bob@globex.test', password: 'memora-demo' }, token: null })
-        const globex = await api.graphView(undefined, 2000, bob.token)
+        const globex = await api.graphView('Entity', 400, bob.token)
         setSt((s) => ({ ...s, acme, globex, globexTenant: bob.tenant.name }))
       }
     } catch (e) {

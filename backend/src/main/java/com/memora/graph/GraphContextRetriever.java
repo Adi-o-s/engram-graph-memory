@@ -25,7 +25,8 @@ import org.springframework.stereotype.Component;
  *       only CURRENT fact edges, and the same visibility rule as PostgreSQL search (another user's personal
  *       memories never match).</li>
  *   <li>Score: {@code 0.6^hops x importance/5 x confidence x (0.5 + 0.5 x e^(-ageDays/30))}; a memory reached
- *       by several paths keeps its best one.</li>
+ *       by several paths keeps its best one. A full-text match (and a budget fill-up) is weighted like 3 extra
+ *       hops, so a fact connected by edges outranks one that only shares a word with the query.</li>
  * </ol>
  * Every result carries the path that reached it. The caller re-checks the ids against PostgreSQL (RLS and
  * visibility) before anything is returned to a client.
@@ -35,6 +36,8 @@ public class GraphContextRetriever {
 
     static final double HOP_DECAY = 0.6;
     static final double RECENCY_DAYS = 30.0;
+    /** A full-text word match is weaker evidence than a graph edge: it scores like 3 extra hops. */
+    static final double TEXT_WEIGHT = Math.pow(HOP_DECAY, 3);
     private static final Pattern TEXT_WORD = Pattern.compile("[\\p{L}\\p{N}]{3,}");
     private static final Set<String> STOP = Set.of("the", "and", "for", "with", "that", "this", "from", "what", "which",
             "how", "are", "was", "were", "our", "you", "your", "about", "into", "have", "has", "does", "use", "uses");
@@ -123,25 +126,25 @@ public class GraphContextRetriever {
         Map<UUID, Candidate> best = new LinkedHashMap<>();
         if (taskId != null) {
             Map<String, Object> p = with(base, "taskId", taskId.toString());
-            collect(best, graph.read(g, "context.task", BY_TASK, p), true);
-            collect(best, graph.read(g, "context.task-handoff", BY_TASK_HANDOFF, p), true);
+            collect(best, graph.read(g, "context.task", BY_TASK, p), 1.0, true);
+            collect(best, graph.read(g, "context.task-handoff", BY_TASK_HANDOFF, p), 1.0, true);
         }
         List<String> keys = GraphKeys.queryKeys(query);
         if (!keys.isEmpty()) {
-            collect(best, graph.read(g, "context.entity", BY_ENTITY, with(base, "keys", keys)), true);
+            collect(best, graph.read(g, "context.entity", BY_ENTITY, with(base, "keys", keys)), 1.0, true);
         }
         String text = fullText(query);
         if (text != null) {
             Map<String, Object> p = with(base, "text", text);
-            collect(best, graph.read(g, "context.text", BY_TEXT, p), true);
-            collect(best, graph.read(g, "context.text-neighbours", BY_TEXT_NEIGHBOURS, p), true);
+            collect(best, graph.read(g, "context.text", BY_TEXT, p), TEXT_WEIGHT, true);
+            collect(best, graph.read(g, "context.text-neighbours", BY_TEXT_NEIGHBOURS, p), TEXT_WEIGHT, true);
         }
         List<Candidate> reached = best.values().stream()
                 .sorted(Comparator.comparingDouble(Candidate::score).reversed()).toList();
         List<Candidate> out = new ArrayList<>(reached.subList(0, Math.min(limit, reached.size())));
         if (fill && out.size() < limit) {
             Map<UUID, Candidate> rest = new LinkedHashMap<>();
-            collect(rest, graph.read(g, "context.important", MOST_IMPORTANT, with(base, "limit", limit * 2)), false);
+            collect(rest, graph.read(g, "context.important", MOST_IMPORTANT, with(base, "limit", limit * 2)), TEXT_WEIGHT, false);
             for (Candidate c : rest.values()) {
                 if (out.size() >= limit) {
                     break;
@@ -154,7 +157,7 @@ public class GraphContextRetriever {
         return out;
     }
 
-    private static void collect(Map<UUID, Candidate> best, List<Map<String, Object>> rows, boolean reached) {
+    private static void collect(Map<UUID, Candidate> best, List<Map<String, Object>> rows, double weight, boolean reached) {
         long now = System.currentTimeMillis();
         for (Map<String, Object> r : rows) {
             UUID id = UUID.fromString(String.valueOf(r.get("id")));
@@ -162,11 +165,8 @@ public class GraphContextRetriever {
             double importance = r.get("importance") instanceof Number n ? n.doubleValue() : 3;
             double confidence = r.get("confidence") instanceof Number n ? n.doubleValue() : 1;
             double ageDays = r.get("createdAt") instanceof Number n ? Math.max(0, (now - n.longValue()) / 86_400_000.0) : 0;
-            double score = Math.pow(HOP_DECAY, hops) * (importance / 5.0) * confidence
+            double score = weight * Math.pow(HOP_DECAY, hops) * (importance / 5.0) * confidence
                     * (0.5 + 0.5 * Math.exp(-ageDays / RECENCY_DAYS));
-            if (!reached) {
-                score *= Math.pow(HOP_DECAY, 3);
-            }
             Candidate c = new Candidate(id, hops, Math.round(score * 1000.0) / 1000.0, GraphPath.of(r.get("nodes"), r.get("rels")), reached);
             Candidate prev = best.get(id);
             if (prev == null || c.score() > prev.score()) {

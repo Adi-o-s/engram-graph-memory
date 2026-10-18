@@ -105,6 +105,7 @@ export function MemoryGraphPage() {
             />
           )}
         </div>
+        <div className="space-y-4">
         <Card title="Selected node">
           {!selected ? <p className="text-xs text-slate-500">Click a node. Its neighbours are loaded from FalkorDB and added to the view.</p> : (
             <div className="space-y-2 text-sm">
@@ -125,7 +126,29 @@ export function MemoryGraphPage() {
             </div>
           )}
         </Card>
+        <KeyEntities onPick={(key) => void expand({ key: `Entity:${key}`, label: 'Entity', id: key, name: key })} />
+        </div>
       </div>
     </div>
+  )
+}
+
+/** Most central entities by PageRank (FalkorDB algo.pageRank over Entity-RELATES-Entity). */
+function KeyEntities({ onPick }: { onPick: (key: string) => void }) {
+  const { data, error } = useAsync(() => api.keyEntities(8), [])
+  return (
+    <Card title="Key entities (PageRank)">
+      <ErrorBox error={error} />
+      {!data ? <Spinner /> : data.length === 0 ? <p className="text-xs text-slate-500">No entity relationships yet.</p> : (
+        <ol className="space-y-1 text-xs" data-testid="key-entities">
+          {data.map((e) => (
+            <li key={e.key} className="flex items-center justify-between gap-2">
+              <button type="button" className="text-left text-brand-600 hover:underline" onClick={() => onPick(e.key)}>{e.name ?? e.key}</button>
+              <span className="text-slate-500"><Mono>{e.score.toFixed(3)}</Mono> · {e.degree} links</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </Card>
   )
 }

@@ -93,7 +93,8 @@ public class ContextService {
         int procedureBudget = Math.max(1, (int) Math.ceil(maxMemories * 0.25));
         int episodeBudget = Math.max(1, maxMemories - factBudget - procedureBudget);
 
-        String mode = properties.retrieval();
+        // A request may pick the retrieval mode (used by the retrieval eval to compare modes on the same data).
+        String mode = request.retrieval() != null ? request.retrieval() : properties.retrieval();
         boolean useGraph = !mode.equals("keyword");
         if (useGraph) {
             // Another tenant's project id is a 404, exactly as on the keyword path.

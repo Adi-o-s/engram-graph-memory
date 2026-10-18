@@ -8,6 +8,7 @@ import com.memora.memory.MemoryDtos.MemoryView;
 import com.memora.task.TaskDtos.TaskView;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.Map;
@@ -20,7 +21,13 @@ public final class ContextDtos {
 
     public record ContextRequest(@Size(max = 1000) String query, UUID projectId, UUID conversationId, UUID taskId,
                                  @Min(1) @Max(50) Integer maxMemories, @Min(0) @Max(50) Integer maxMessages,
-                                 @Min(200) @Max(20000) Integer maxChars) {
+                                 @Min(200) @Max(20000) Integer maxChars,
+                                 @Pattern(regexp = "graph|hybrid|keyword") String retrieval) {
+
+        public ContextRequest(String query, UUID projectId, UUID conversationId, UUID taskId, Integer maxMemories,
+                              Integer maxMessages, Integer maxChars) {
+            this(query, projectId, conversationId, taskId, maxMemories, maxMessages, maxChars, null);
+        }
     }
 
     public record ContextStats(int chars, int maxChars, int memoriesIncluded, int memoriesOmitted, int messagesIncluded,

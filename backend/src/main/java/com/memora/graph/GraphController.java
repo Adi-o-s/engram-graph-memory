@@ -9,6 +9,7 @@ import com.memora.security.Authz;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,8 +25,11 @@ public class GraphController {
     private final GraphAlerts alerts;
     private final GraphRebuildService rebuild;
     private final GraphProjector projector;
+    private final GraphInsights insights;
 
-    public GraphController(GraphExplainService explain, GraphAlerts alerts, GraphRebuildService rebuild, GraphProjector projector) {
+    public GraphController(GraphExplainService explain, GraphAlerts alerts, GraphRebuildService rebuild, GraphProjector projector,
+                           GraphInsights insights) {
+        this.insights = insights;
         this.explain = explain;
         this.alerts = alerts;
         this.rebuild = rebuild;
@@ -56,6 +60,12 @@ public class GraphController {
     @Operation(summary = "Direct neighbours of one node (by id, or entity key)")
     public GraphView neighbours(Actor actor, @RequestParam String id) {
         return explain.neighbourhood(actor, id);
+    }
+
+    @GetMapping({"/api/graph/key-entities", "/api/v1/graph/key-entities"})
+    @Operation(summary = "The most central entities by PageRank over entity relationships (algo.pageRank)")
+    public List<Map<String, Object>> keyEntities(Actor actor, @RequestParam(defaultValue = "10") int limit) {
+        return insights.keyEntities(actor, Math.max(1, Math.min(limit, 100)));
     }
 
     @PostMapping({"/api/admin/graph/rebuild", "/api/v1/admin/graph/rebuild"})

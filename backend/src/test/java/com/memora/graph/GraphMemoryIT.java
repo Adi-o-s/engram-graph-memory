@@ -204,6 +204,25 @@ class GraphMemoryIT extends IntegrationTest {
     }
 
     @Test
+    void keyEntitiesAreRankedByPageRank() {
+        String conversation = newConversation(alice, newProject(alice, "graph-rank"));
+        String hub = "hub" + UUID.randomUUID().toString().substring(0, 6);
+        say(conversation, hub + "-gateway uses Kafka. " + hub + "-orders uses Kafka. " + hub + "-billing uses Kafka.");
+        Response r = alice.get("/api/v1/graph/key-entities?limit=100");
+        assertThat(r.status()).as(r.toString()).isEqualTo(200);
+        List<Double> scores = new ArrayList<>();
+        List<String> keys = new ArrayList<>();
+        r.body().forEach(e -> {
+            scores.add(e.path("score").asDouble());
+            keys.add(e.path("key").asText());
+        });
+        assertThat(keys).contains("kafka", hub + "-gateway");
+        assertThat(scores).isSortedAccordingTo(java.util.Comparator.reverseOrder());
+        // Three services point at Kafka, so it outranks each of them.
+        assertThat(keys.indexOf("kafka")).isLessThan(keys.indexOf(hub + "-gateway"));
+    }
+
+    @Test
     void rebuildReconstructsTheSameGraphFromPostgres() {
         String conversation = newConversation(alice, newProject(alice, "graph-rebuild"));
         say(conversation, "checkout-api uses Redis. Redis is hosted on AWS.");

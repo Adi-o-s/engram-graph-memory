@@ -1,6 +1,6 @@
 import { qs, request, newIdempotencyKey } from './client'
 import type {
-  Agent, AuditEvent, ContextBundle, Conversation, DemoAccounts, Handoff, History, IngestResult, LabResult, LabScenario,
+  Agent, AuditEvent, ContextBundle, Conversation, DemoAccounts, Handoff, History, IngestResult, KeyEntity, LabResult, LabScenario,
   LoginResponse, Me, Memory, MemoryType, MemoryWriteResult, Message, Overview, Page, Project, RegisteredAgent, RunStatus,
   SearchResult, StepResult, Task, TaskEvent, TaskStatus, TeachResult, Explanation, GraphAlert, GraphView,
 } from './types'
@@ -52,6 +52,7 @@ export const api = {
   graphAlerts: (limit = 50) => request<GraphAlert[]>(`${V1}/graph/alerts${qs({ limit })}`),
   graphView: (label?: string, limit = 400, token?: string) => request<GraphView>(`${V1}/graph/view${qs({ label, limit })}`, { token }),
   graphNeighbours: (id: string) => request<GraphView>(`${V1}/graph/neighbours${qs({ id })}`),
+  keyEntities: (limit = 10) => request<KeyEntity[]>(`${V1}/graph/key-entities${qs({ limit })}`),
   rebuildGraph: () => request<Record<string, unknown>>(`${V1}/admin/graph/rebuild`, { method: 'POST' }),
 
   // agents

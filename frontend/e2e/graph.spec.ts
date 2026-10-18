@@ -53,5 +53,6 @@ test('graph walkthrough shows context paths, a stale-knowledge alert and separat
   await page.getByRole('navigation').getByRole('link', { name: 'Memory graph' }).click()
   await expect(page.getByTestId('graph-counts')).toContainText('Entity')
   await expect(page.locator('[data-testid=graph-canvas] canvas')).toBeVisible()
+  await expect(page.getByTestId('key-entities')).toContainText('links')
   await shot(page, '21-memory-graph')
 })

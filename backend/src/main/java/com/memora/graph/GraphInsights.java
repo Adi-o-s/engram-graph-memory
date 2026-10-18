@@ -56,6 +56,20 @@ public class GraphInsights {
                    collect(DISTINCT [h.id, h.status, h.summary]) AS handoffs,
                    collect(DISTINCT [run.id, run.name, run.status]) AS runs""";
 
+    /**
+     * Entity importance: PageRank over the entity-RELATES-entity graph (FalkorDB's {@code algo.pageRank}).
+     * Only entities with a CURRENT fact edge are returned, so entities known only from someone's personal memory
+     * (which never get RELATES edges) are not listed.
+     */
+    static final String KEY_ENTITIES = """
+            CALL algo.pageRank('Entity', 'RELATES') YIELD node, score
+            MATCH (node)-[r:RELATES]-(:Entity)
+            WHERE r.status = 'CURRENT'
+            WITH node, score, count(r) AS degree
+            RETURN node.key AS key, node.name AS name, score, degree
+            ORDER BY score DESC, degree DESC
+            LIMIT $limit""";
+
     static final String RESOLVE = """
             MATCH (e:Entity) WHERE e.key IN $keys
             OPTIONAL MATCH (e)-[r]-()
@@ -90,6 +104,12 @@ public class GraphInsights {
         projector.catchUp(actor.tenantId());
         List<Map<String, Object>> rows = graph.read(graphs.of(actor), "tool.resolve-entity", RESOLVE, Map.of("keys", keys));
         return rows.isEmpty() ? java.util.Optional.empty() : java.util.Optional.of(String.valueOf(rows.get(0).get("key")));
+    }
+
+    /** The most central entities of the tenant graph by PageRank, best first. */
+    public List<Map<String, Object>> keyEntities(Actor actor, int limit) {
+        projector.catchUp(actor.tenantId());
+        return graph.read(graphs.of(actor), "insights.key-entities", KEY_ENTITIES, Map.of("limit", limit));
     }
 
     public Map<String, Object> neighbours(Actor actor, String entity, int depth) {
