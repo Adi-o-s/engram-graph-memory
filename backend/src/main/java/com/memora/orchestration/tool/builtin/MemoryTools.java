@@ -9,6 +9,9 @@ import static com.memora.orchestration.tool.builtin.Schemas.req;
 import static com.memora.orchestration.tool.builtin.Schemas.string;
 
 import com.memora.common.Json;
+import com.memora.graph.GraphContextRetriever;
+import com.memora.graph.GraphContextRetriever.Candidate;
+import com.memora.graph.GraphProjector;
 import com.memora.memory.MemoryDtos.MemoryDraft;
 import com.memora.memory.MemoryDtos.MemoryView;
 import com.memora.memory.MemoryDtos.MemoryWriteResult;
@@ -112,9 +115,11 @@ public final class MemoryTools {
     public static class MemorySearchTool implements Tool {
 
         private final MemorySearchService search;
+        private final MemoryService memories;
 
-        public MemorySearchTool(MemorySearchService search) {
+        public MemorySearchTool(MemorySearchService search, MemoryService memories) {
             this.search = search;
+            this.memories = memories;
         }
 
         @Override
@@ -143,6 +148,9 @@ public final class MemoryTools {
                     types(ctx, args.get("types")), limit, (String) args.get("category"),
                     args.get("tags") instanceof List<?> t ? (List<String>) t : List.of());
             List<String> citations = items.stream().map(m -> "[m:" + String.valueOf(m.get("id")).substring(0, 8) + "] " + m.get("content")).toList();
+            // The step USED these memories and the agent READ them: graph edges that power stale-knowledge alerts.
+            memories.recordAccess(ctx.actor(), items.stream().map(m -> java.util.UUID.fromString(String.valueOf(m.get("id")))).toList(),
+                    ctx.stepRunId());
             return Json.map("items", items, "count", items.size(), "query", args.get("query"), "citations", citations,
                     "ids", items.stream().map(m -> m.get("id")).toList());
         }
@@ -215,10 +223,17 @@ public final class MemoryTools {
 
         private final MemorySearchService search;
         private final ArtifactService artifacts;
+        private final GraphContextRetriever graph;
+        private final GraphProjector projector;
+        private final MemoryService memories;
 
-        public ContextBuildTool(MemorySearchService search, ArtifactService artifacts) {
+        public ContextBuildTool(MemorySearchService search, ArtifactService artifacts, GraphContextRetriever graph,
+                                GraphProjector projector, MemoryService memories) {
             this.search = search;
             this.artifacts = artifacts;
+            this.graph = graph;
+            this.projector = projector;
+            this.memories = memories;
         }
 
         @Override
@@ -239,6 +254,7 @@ public final class MemoryTools {
                     : contextChars(ctx, policy), policy.maxChars());
             String query = args.get("query") == null ? contextQuery(ctx) : String.valueOf(args.get("query"));
             int per = Math.max(2, policy.maxItems() / 2);
+            projector.catchUp(ctx.tenantId());
             List<Map<String, Object>> facts = filtered(ctx, query, MemoryType.SEMANTIC, policy, per);
             List<Map<String, Object>> procedures = filtered(ctx, query, MemoryType.PROCEDURAL, policy, Math.max(1, per / 2));
             List<Map<String, Object>> episodes = filtered(ctx, query, MemoryType.EPISODIC, policy, Math.max(1, per / 2));
@@ -267,7 +283,21 @@ public final class MemoryTools {
                 }
                 sb.append(line).append('\n');
             }
+            List<java.util.UUID> used = new ArrayList<>();
+            for (List<Map<String, Object>> section : List.of(facts, procedures, episodes)) {
+                section.forEach(m -> used.add(java.util.UUID.fromString(String.valueOf(m.get("id")))));
+            }
+            memories.recordAccess(ctx.actor(), used, ctx.stepRunId());
+            Map<String, Object> paths = new LinkedHashMap<>();
+            for (List<Map<String, Object>> section : List.of(facts, procedures, episodes)) {
+                section.forEach(m -> {
+                    if (m.get("path") != null) {
+                        paths.put(String.valueOf(m.get("id")), m.get("path"));
+                    }
+                });
+            }
             return Json.map("rendered", sb.toString(), "facts", facts, "procedures", procedures, "episodes", episodes,
+                    "retrieval", "graph", "paths", paths,
                     "artifacts", artifactNames, "chars", sb.length(), "maxChars", maxChars, "truncated", truncated,
                     "memoriesIncluded", facts.size() + procedures.size() + episodes.size());
         }
@@ -276,7 +306,22 @@ public final class MemoryTools {
             if (!policy.types().isEmpty() && !policy.types().contains(type)) {
                 return List.of();
             }
-            List<Map<String, Object>> hits = search(search, ctx, query, policy.read(), List.of(type), limit, null, List.of());
+            List<String> keys = policy.read().stream().map(s -> ScopeKeys.keyFor(s, ctx)).filter(Objects::nonNull).toList();
+            if (keys.isEmpty()) {
+                return List.of();
+            }
+            // Graph traversal over the run's readable scopes; PostgreSQL re-checks every id.
+            List<Candidate> candidates = graph.retrieve(ctx.actor(), type, query, null, null, keys, limit, true);
+            Map<java.util.UUID, Candidate> byId = new LinkedHashMap<>();
+            candidates.forEach(c -> byId.put(c.memoryId(), c));
+            List<Map<String, Object>> hits = new ArrayList<>();
+            for (MemoryView v : memories.visibleCurrent(ctx.actor(), new ArrayList<>(byId.keySet()))) {
+                Map<String, Object> m = new LinkedHashMap<>(toMap(v));
+                Candidate c = byId.get(v.id());
+                m.put("path", c.path().render());
+                m.put("hops", c.hops());
+                hits.add(m);
+            }
             if (hits.size() < limit) {
                 List<Map<String, Object>> merged = new ArrayList<>(hits);
                 for (Map<String, Object> m : search(search, ctx, null, policy.read(), List.of(type), limit, null, List.of())) {

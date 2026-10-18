@@ -1,6 +1,12 @@
 package com.memora.context;
 
 import com.memora.context.ContextDtos.ContextBundle;
+import com.memora.context.ContextDtos.ContextPath;
+import com.memora.graph.GraphAlerts;
+import com.memora.graph.GraphAlerts.Alert;
+import com.memora.graph.GraphContextRetriever;
+import com.memora.graph.GraphContextRetriever.Candidate;
+import com.memora.graph.GraphProjector;
 import com.memora.context.ContextDtos.ContextRequest;
 import com.memora.context.ContextDtos.ContextStats;
 import com.memora.conversation.ConversationDtos.MessageView;
@@ -26,6 +32,11 @@ import org.springframework.stereotype.Service;
  * Assembles a compact, relevant working context for an agent instead of replaying whole
  * conversations: the task and its latest handoff, current facts, procedures and recent events
  * relevant to the query, and the last few messages, all within a character budget.
+ *
+ * <p>Memories are chosen by traversal of the tenant's FalkorDB graph ({@link GraphContextRetriever}); each one
+ * comes with the path that reached it. PostgreSQL then re-checks every id (RLS and personal scope) before it is
+ * used. Agents also get a "changed since you last read it" section from the graph's stale-knowledge alerts.
+ * {@code memora.context.retrieval=keyword} restores the PostgreSQL-only path.
  */
 @Service
 public class ContextService {
@@ -36,9 +47,19 @@ public class ContextService {
     private final TaskService tasks;
     private final HandoffService handoffs;
     private final ContextProperties properties;
+    private final GraphContextRetriever graph;
+    private final GraphProjector projector;
+    private final GraphAlerts alerts;
+    private final com.memora.project.ProjectService projects;
 
     public ContextService(MemorySearchService search, MemoryService memories, ConversationService conversations,
-                          TaskService tasks, HandoffService handoffs, ContextProperties properties) {
+                          TaskService tasks, HandoffService handoffs, ContextProperties properties,
+                          GraphContextRetriever graph, GraphProjector projector, GraphAlerts alerts,
+                          com.memora.project.ProjectService projects) {
+        this.projects = projects;
+        this.graph = graph;
+        this.projector = projector;
+        this.alerts = alerts;
         this.search = search;
         this.memories = memories;
         this.conversations = conversations;
@@ -72,15 +93,42 @@ public class ContextService {
         int procedureBudget = Math.max(1, (int) Math.ceil(maxMemories * 0.25));
         int episodeBudget = Math.max(1, maxMemories - factBudget - procedureBudget);
 
-        List<MemoryView> facts = relevant(actor, MemoryType.SEMANTIC, query, projectId, null, factBudget);
-        List<MemoryView> procedures = relevant(actor, MemoryType.PROCEDURAL, query, projectId, null, procedureBudget);
-        List<MemoryView> episodes = relevant(actor, MemoryType.EPISODIC, query, projectId, task == null ? null : task.id(),
-                episodeBudget);
+        // A request may pick the retrieval mode (used by the retrieval eval to compare modes on the same data).
+        String mode = request.retrieval() != null ? request.retrieval() : properties.retrieval();
+        boolean useGraph = !mode.equals("keyword");
+        if (useGraph) {
+            // Another tenant's project id is a 404, exactly as on the keyword path.
+            projects.requireInTenant(actor, projectId);
+            // Read-your-writes: apply this tenant's pending outbox rows before traversing.
+            projector.catchUp(actor.tenantId());
+        }
+        Map<UUID, ContextPath> paths = new LinkedHashMap<>();
+        UUID taskId = task == null ? null : task.id();
+        List<MemoryView> facts = useGraph ? graphRelevant(actor, MemoryType.SEMANTIC, query, projectId, taskId, factBudget, mode, paths)
+                : relevant(actor, MemoryType.SEMANTIC, query, projectId, null, factBudget);
+        List<MemoryView> procedures = useGraph ? graphRelevant(actor, MemoryType.PROCEDURAL, query, projectId, taskId, procedureBudget, mode, paths)
+                : relevant(actor, MemoryType.PROCEDURAL, query, projectId, null, procedureBudget);
+        List<MemoryView> episodes = useGraph ? graphRelevant(actor, MemoryType.EPISODIC, query, projectId, taskId, episodeBudget, mode, paths)
+                : relevant(actor, MemoryType.EPISODIC, query, projectId, taskId, episodeBudget);
+        List<Alert> stale = useGraph ? alerts.openFor(actor) : List.of();
         List<MessageView> recentMessages = request.conversationId() != null && maxMessages > 0
                 ? conversations.recent(actor, request.conversationId(), maxMessages) : List.of();
 
         Budget budget = new Budget(maxChars);
         budget.add("# Working context" + (query != null ? " for: " + abbreviate(query, 120) : ""));
+        List<Alert> shownAlerts = new ArrayList<>();
+        if (!stale.isEmpty()) {
+            budget.add("## \u26a0 Changed since you last read it");
+            for (Alert a : stale) {
+                String line = "- " + abbreviate(a.oldContent(), 200) + " -> "
+                        + (a.newContent() != null ? abbreviate(a.newContent(), 200) : "(" + a.oldStatus().toLowerCase() + ", no replacement)")
+                        + (a.handoffId() != null ? " [carried by an open handoff to you]" : " [you read the old version]");
+                if (budget.add(line)) {
+                    shownAlerts.add(a);
+                }
+            }
+            alerts.markDelivered(actor, shownAlerts.stream().map(Alert::alertId).toList());
+        }
         if (task != null) {
             budget.add("## Task");
             budget.add("[" + task.status() + " v" + task.version() + "] " + task.title()
@@ -111,12 +159,43 @@ public class ContextService {
         includedProcedures.forEach(m -> accessed.add(m.id()));
         includedEpisodes.forEach(m -> accessed.add(m.id()));
         memories.recordAccess(actor, accessed);
+        paths.keySet().retainAll(accessed);
 
         int memoriesTotal = facts.size() + procedures.size() + episodes.size();
         ContextStats stats = new ContextStats(budget.length(), maxChars, accessed.size(), memoriesTotal - accessed.size(),
                 includedMessages.size(), recentMessages.size() - includedMessages.size(), budget.truncated);
+        Map<UUID, ContextPath> includedPaths = new LinkedHashMap<>();
+        accessed.forEach(id -> {
+            if (paths.containsKey(id)) {
+                includedPaths.put(id, paths.get(id));
+            }
+        });
         return new ContextBundle(query, task, latestHandoff, includedFacts, includedProcedures, includedEpisodes,
-                includedMessages, budget.text(), stats);
+                includedMessages, budget.text(), stats, useGraph ? mode : "keyword", includedPaths, shownAlerts);
+    }
+
+    /**
+     * Graph traversal first (memories reached from the query's entities, full-text hits, the task and its
+     * handoffs, best score first), then the most important visible memories to fill the budget. In hybrid mode
+     * PostgreSQL keyword matches are merged in after the graph's own hits. Every id is re-checked in PostgreSQL.
+     */
+    private List<MemoryView> graphRelevant(Actor actor, MemoryType type, String query, UUID projectId, UUID taskId, int limit,
+                                           String mode, Map<UUID, ContextPath> paths) {
+        List<Candidate> candidates = graph.retrieve(actor, type, query, projectId, taskId, limit * 2, !mode.equals("hybrid"));
+        List<UUID> ids = new ArrayList<>();
+        for (Candidate c : candidates) {
+            ids.add(c.memoryId());
+            paths.putIfAbsent(c.memoryId(), new ContextPath(c.path(), c.hops(), c.score(), c.reached()));
+        }
+        List<MemoryView> picked = new ArrayList<>(memories.visibleCurrent(actor, ids));
+        if (mode.equals("hybrid") && picked.size() < limit) {
+            for (MemoryView m : relevant(actor, type, query, projectId, taskId, limit)) {
+                if (picked.stream().noneMatch(p -> p.id().equals(m.id()))) {
+                    picked.add(m);
+                }
+            }
+        }
+        return picked.stream().limit(limit).toList();
     }
 
     /** Query matches first; if the query finds fewer than the budget, fill with the most important current items. */

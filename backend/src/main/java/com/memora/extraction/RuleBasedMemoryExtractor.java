@@ -41,6 +41,15 @@ public class RuleBasedMemoryExtractor implements MemoryExtractor {
             "^" + WE + "\\s+(?:prefers?)\\s+(.+?)(?:\\s+(?:over|rather than|instead of|to)\\s+(.+))?$", I);
     private static final Pattern USES = Pattern.compile(
             "^" + WE + "\\s+(?:currently\\s+|now\\s+|still\\s+|mainly\\s+|primarily\\s+)?(?:use|uses|are using|is using|rely on|relies on|run on|runs on|are built (?:on|with)|is built (?:on|with)|build with|builds with|deploy(?:s)? (?:on|to))\\s+(.+)$", I);
+    /** "billing-service uses MySQL", "postgres is hosted on RDS", "billing-service deploys through ArgoCD". */
+    private static final Pattern NAMED_RELATION = Pattern.compile(
+            "^(?:the\\s+)?([\\p{L}\\p{N}][\\p{L}\\p{N}._-]*(?:\\s+(?:service|api|app|db|database|cluster))?)\\s+"
+                    + "(uses|relies on|depends on|is hosted on|is hosted in|runs on|is deployed (?:on|to)|deploys? (?:through|via|with)|is deployed (?:through|via|with)|calls|talks to|stores data in|writes to|reads from)\\s+(.+)$", I);
+    /** "We moved billing-service to Postgres", "we migrated billing-service from MySQL to Postgres". */
+    private static final Pattern NAMED_SWITCH = Pattern.compile(
+            "^" + WE + "\\s+(?:have\\s+|has\\s+)?(?:just\\s+)?(?:switched|migrated|moved)\\s+(?:the\\s+)?([\\p{L}\\p{N}][\\p{L}\\p{N}._-]*)\\s+(?:from\\s+(.+?)\\s+)?(?:to|onto)\\s+(.+)$", I);
+    private static final java.util.Set<String> NOT_SUBJECTS = java.util.Set.of("we", "i", "you", "they", "he", "she", "it",
+            "this", "that", "everyone", "everybody", "nobody", "someone", "team", "project", "our", "my", "who", "which");
     private static final Pattern OUR_X_IS = Pattern.compile(
             "^(?:our|the)\\s+((?:main |primary )?(?:database|db|datastore|language|programming language|framework|backend framework|web framework|frontend|frontend framework|build tool|cache|cloud|cloud provider|ci|issue tracker|message broker|queue))\\s+(?:is|will be)\\s+(.+)$", I);
     private static final Pattern DECISION = Pattern.compile(
@@ -102,6 +111,17 @@ public class RuleBasedMemoryExtractor implements MemoryExtractor {
         if ((m = OUR_X_IS.matcher(s)).matches() && !NEGATION.matcher(s).find()) {
             String noun = m.group(1).replaceFirst("(?i)^(main|primary)\\s+", "");
             return usesFacts(s, m.group(2), TechVocabulary.categoryFromNoun(noun));
+        }
+        if ((m = NAMED_SWITCH.matcher(s)).matches() && !NEGATION.matcher(s).find()
+                && !NOT_SUBJECTS.contains(m.group(1).toLowerCase(Locale.ROOT))) {
+            return namedSwitch(m.group(1), m.group(2), m.group(3));
+        }
+        if ((m = NAMED_RELATION.matcher(s)).matches() && !NEGATION.matcher(s).find()
+                && !NOT_SUBJECTS.contains(m.group(1).toLowerCase(Locale.ROOT))) {
+            List<ExtractedMemory> named = namedRelation(m.group(1), m.group(2), m.group(3));
+            if (!named.isEmpty()) {
+                return named;
+            }
         }
         if ((m = DECISION.matcher(s)).matches()) {
             String what = firstNonNull(m.group(1), m.group(2), m.group(3));
@@ -171,6 +191,61 @@ public class RuleBasedMemoryExtractor implements MemoryExtractor {
                 null, null, null, false, 3, 0.9, List.of("event", "migration"), "switch-event",
                 Json.map("outcome", "success", "verb", "switched")));
         return out;
+    }
+
+    /** A fact about a named component; the subject becomes a graph entity, the value another one. */
+    private List<ExtractedMemory> namedRelation(String subjectPhrase, String verb, String valuePhrase) {
+        String subject = componentName(subjectPhrase);
+        String value = trimValue(valuePhrase.replaceFirst("(?i)\\s+(for|because|since|in order to)\\s+.*$", ""));
+        if (value.isEmpty() || value.split("\\s+").length > 4
+                || value.matches("(?i)^(must|should|shall|will|can|could|has|have|need|needs|is|are|be|to|the same)\\b.*")) {
+            return List.of();
+        }
+        Optional<TechVocabulary.Term> term = TechVocabulary.lookup(value);
+        String v = verb.toLowerCase(Locale.ROOT);
+        String relation = v.matches("uses|relies on|depends on") ? "uses"
+                : v.matches("is hosted (on|in)|runs on|is deployed (on|to)") ? "hosted_on"
+                : v.matches("deploys? (through|via|with)|is deployed (through|via|with)") ? "deploys_via"
+                : v.matches("calls|talks to") ? "calls" : "stores_in";
+        String category = term.map(TechVocabulary.Term::category).orElse(null);
+        String predicate = relation.equals("uses") && category != null ? "uses." + category : relation;
+        String display = term.map(TechVocabulary.Term::display).orElse(value);
+        String canonical = term.map(TechVocabulary.Term::canonical).orElse(TechVocabulary.normalize(value));
+        String phrase = switch (relation) {
+            case "uses" -> category != null ? " uses " + display + " as its " + category : " uses " + display;
+            case "hosted_on" -> " is hosted on " + display;
+            case "deploys_via" -> " deploys through " + display;
+            case "calls" -> " calls " + display;
+            default -> " stores data in " + display;
+        };
+        return List.of(semantic("fact", subject + phrase + ".", subject, predicate, canonical, false, 4,
+                0.85, tags("technology", category), "named-relation", Json.map("category", category, "relation", relation)));
+    }
+
+    private List<ExtractedMemory> namedSwitch(String subjectPhrase, String fromPhrase, String toPhrase) {
+        String subject = componentName(subjectPhrase);
+        String to = trimValue(toPhrase);
+        Optional<TechVocabulary.Term> toTerm = TechVocabulary.lookup(to);
+        Optional<TechVocabulary.Term> fromTerm = fromPhrase == null ? Optional.empty() : TechVocabulary.lookup(trimValue(fromPhrase));
+        String category = toTerm.map(TechVocabulary.Term::category).or(() -> fromTerm.map(TechVocabulary.Term::category)).orElse(null);
+        String predicate = category != null ? "uses." + category : "hosted_on";
+        String toDisplay = toTerm.map(TechVocabulary.Term::display).orElse(to);
+        String content = subject + (category != null ? " uses " + toDisplay + " as its " + category
+                : " is hosted on " + toDisplay)
+                + (fromPhrase != null ? " (moved from " + fromTerm.map(TechVocabulary.Term::display).orElse(trimValue(fromPhrase)) + ")." : ".");
+        List<ExtractedMemory> out = new ArrayList<>();
+        out.add(semantic("fact", content, subject, predicate, toTerm.map(TechVocabulary.Term::canonical)
+                        .orElse(TechVocabulary.normalize(to)), false, 4, 0.9, tags("technology", category), "named-switch",
+                Json.map("category", category, "previous", fromTerm.map(TechVocabulary.Term::canonical).orElse(null))));
+        out.add(new ExtractedMemory(MemoryType.EPISODIC, "event", "Moved " + subject + " to " + toDisplay + ".",
+                null, null, null, false, 3, 0.9, List.of("event", "migration"), "named-switch-event",
+                Json.map("outcome", "success", "verb", "moved")));
+        return out;
+    }
+
+    private static String componentName(String phrase) {
+        String p = TechVocabulary.normalize(phrase).replaceFirst("^the\\s+", "");
+        return TechVocabulary.lookup(p).map(TechVocabulary.Term::canonical).orElse(p.replaceAll("\\s+", "-"));
     }
 
     private ExtractedMemory preference(String sentence, String subject, String likedPhrase, String otherPhrase,

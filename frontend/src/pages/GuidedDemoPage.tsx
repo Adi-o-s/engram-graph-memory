@@ -4,6 +4,7 @@ import { api } from '../api/endpoints'
 import type { RunStatus, StepResult, TeachResult } from '../api/types'
 import { Badge, Button, Card, Empty, ErrorBox, JsonView, Mono, PageHeader, Select, Spinner, StatusBadge } from '../components/ui'
 import { MemoryCard } from '../components/MemoryCard'
+import { GraphWalkthrough } from '../components/GraphWalkthrough'
 import { useAsync } from '../lib/useAsync'
 import { cx, dateTime, shortId, timeAgo } from '../lib/format'
 
@@ -79,7 +80,7 @@ export function GuidedDemoPage() {
     <div className="space-y-6">
       <PageHeader
         title="Guided demo"
-        description="Three deterministic agents (no LLM) coordinate through Memora's real APIs. Every step writes to PostgreSQL; the panel on the right reads it back."
+        description="Start with the graph walkthrough: a conversation becomes a FalkorDB memory graph, an agent gets context with paths, a changed fact alerts the agent that read it, and tenants have separate graphs. Below it, three deterministic agents (no LLM) coordinate through the same APIs."
         actions={
           runs.data && runs.data.length > 0 ? (
             <Select aria-label="Demo run" value={runId ?? ''} onChange={(e) => { setRunId(e.target.value); setResults({}); setTeach(undefined) }} className="w-64">
@@ -88,6 +89,11 @@ export function GuidedDemoPage() {
           ) : null
         }
       />
+      <GraphWalkthrough />
+      <div>
+        <h2 className="text-base font-semibold">Orchestration demo (Planner → Developer → Tester)</h2>
+        <p className="text-xs text-slate-500">Every step writes to PostgreSQL; the panel on the right reads it back.</p>
+      </div>
       <ErrorBox error={error} />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="space-y-3">

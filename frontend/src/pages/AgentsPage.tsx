@@ -5,6 +5,7 @@ import type { Agent, ContextBundle, RegisteredAgent } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Input, Mono, PageHeader, Select, Spinner, StatusBadge } from '../components/ui'
 import { MemoryCard } from '../components/MemoryCard'
+import { AlertList, PathChips, WhyButton } from '../components/GraphBits'
 import { useAsync } from '../lib/useAsync'
 import { shortId, timeAgo } from '../lib/format'
 
@@ -208,12 +209,20 @@ function ContextBuilder() {
             <Badge>{bundle.stats.memoriesIncluded} memories included</Badge>
             <Badge>{bundle.stats.memoriesOmitted} omitted for budget</Badge>
             <Badge>{bundle.stats.messagesIncluded} messages</Badge>
+            {bundle.retrieval && <Badge tone="violet">retrieval: {bundle.retrieval}{bundle.retrieval !== 'keyword' ? ' (FalkorDB)' : ''}</Badge>}
           </div>
+          {!!bundle.alerts?.length && <AlertList alerts={bundle.alerts} />}
           <div className="grid gap-3 lg:grid-cols-2">
             <pre className="code-block max-h-96">{bundle.rendered || '(empty)'}</pre>
             <div className="max-h-96 space-y-1.5 overflow-y-auto">
               {[...bundle.facts, ...bundle.procedures, ...bundle.episodes].length === 0 ? <Empty>No matching memories.</Empty> :
-                [...bundle.facts, ...bundle.procedures, ...bundle.episodes].map((m) => <MemoryCard key={m.id} memory={m} compact />)}
+                [...bundle.facts, ...bundle.procedures, ...bundle.episodes].map((m) => (
+                  <div key={m.id}>
+                    <MemoryCard memory={m} compact />
+                    {bundle.paths?.[m.id] && <PathChips steps={bundle.paths[m.id].path.steps} className="mt-1" />}
+                    <WhyButton memoryId={m.id} path={bundle.paths?.[m.id]} />
+                  </div>
+                ))}
             </div>
           </div>
         </div>

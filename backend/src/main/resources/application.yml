@@ -47,7 +47,19 @@ memora:
   handoff:
     lease-seconds: ${MEMORA_HANDOFF_LEASE_SECONDS:300}
     recovery-interval-ms: ${MEMORA_HANDOFF_RECOVERY_INTERVAL_MS:30000}
+  graph:
+    # FalkorDB holds the memory graph (one graph per tenant), fed from PostgreSQL by the graph_outbox projector.
+    host: ${MEMORA_FALKORDB_HOST:localhost}
+    port: ${MEMORA_FALKORDB_PORT:6379}
+    password: ${MEMORA_FALKORDB_PASSWORD:}
+    query-timeout-ms: 5000
+    poll-interval-ms: ${MEMORA_GRAPH_POLL_INTERVAL_MS:250}
+    batch-size: 200
+    max-attempts: 10
+    catch-up-timeout-ms: 3000
   context:
+    # graph (default): context from FalkorDB traversal | hybrid: graph + PostgreSQL keyword | keyword: PostgreSQL only
+    retrieval: ${MEMORA_CONTEXT_RETRIEVAL:graph}
     default-max-chars: 4000
     default-max-memories: 12
     default-max-messages: 10
@@ -81,6 +93,9 @@ management:
       probes:
         enabled: true
       show-details: never
+  health:
+    redis:
+      enabled: false
 
 springdoc:
   api-docs:

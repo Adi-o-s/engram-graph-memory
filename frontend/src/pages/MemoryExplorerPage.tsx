@@ -4,6 +4,7 @@ import { api } from '../api/endpoints'
 import type { Memory, MemoryScope, MemoryType, MemoryWriteResult } from '../api/types'
 import { Badge, Button, Card, Empty, ErrorBox, Field, Input, JsonView, Mono, PageHeader, Select, Spinner, StatusBadge, Textarea } from '../components/ui'
 import { MemoryCard } from '../components/MemoryCard'
+import { WhyButton } from '../components/GraphBits'
 import { useAsync } from '../lib/useAsync'
 import { dateTime, shortId } from '../lib/format'
 
@@ -154,6 +155,7 @@ function MemoryDetail({ id, onChanged, onSelect }: { id: string; onChanged: () =
           {m.category && <Badge>{m.category}</Badge>}
           {m.tags.map((t) => <Badge key={t} tone="blue">#{t}</Badge>)}
         </div>
+        <WhyButton memoryId={m.id} from={m.subject ? `entity:${m.subject}` : undefined} />
         <p className="text-base text-slate-900">{m.content}</p>
         <dl className="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-1 text-xs">
           {m.factKey && (<><dt className="text-slate-500">Fact</dt><dd><Mono>{m.subject} · {m.predicate} = {m.value}</Mono></dd></>)}

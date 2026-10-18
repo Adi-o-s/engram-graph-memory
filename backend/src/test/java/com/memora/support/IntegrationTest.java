@@ -35,6 +35,8 @@ public abstract class IntegrationTest {
         registry.add("spring.datasource.url", () -> TestDatabase.URL);
         registry.add("spring.datasource.username", () -> TestDatabase.USER);
         registry.add("spring.datasource.password", () -> TestDatabase.PASSWORD);
+        registry.add("memora.graph.host", () -> TestFalkorDB.HOST);
+        registry.add("memora.graph.port", () -> TestFalkorDB.PORT);
     }
 
     protected ApiClient anonymous() {

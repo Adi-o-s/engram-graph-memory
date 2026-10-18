@@ -90,7 +90,37 @@ export interface ContextBundle {
   query?: string; task?: Task; latestHandoff?: Handoff; facts: Memory[]; procedures: Memory[]; episodes: Memory[]
   messages: Message[]; rendered: string
   stats: { chars: number; maxChars: number; memoriesIncluded: number; memoriesOmitted: number; messagesIncluded: number; messagesOmitted: number; truncated: boolean }
+  retrieval?: string
+  paths?: Record<string, ContextPath>
+  alerts?: GraphAlert[]
 }
+
+// FalkorDB memory graph
+export interface PathStep { label: string; id?: string; name?: string; via?: string }
+export interface GraphPath { steps: PathStep[]; hops: number }
+export interface ContextPath { path: GraphPath; hops: number; score: number; reached: boolean }
+export interface GraphAlert {
+  alertId: string; kind: string; status: string; createdAt?: number; deliveredAt?: number
+  targetLabel?: string; targetId?: string; targetName?: string
+  oldMemoryId: string; oldContent: string; oldStatus: string; newMemoryId?: string; newContent?: string; handoffId?: string
+  path: PathStep[]
+}
+export interface Explanation {
+  memoryId: string; from?: string; path?: GraphPath
+  provenance: {
+    content?: string; status?: string; version?: number
+    message?: { id: string; role: string; snippet: string }; conversation?: { id: string; title: string }
+    writtenBy?: { label: string; id: string; name?: string }[]
+    supersedes?: { id: string; content: string; status: string }[]
+    supersededBy?: { id: string; content: string; status: string }[]
+    entities?: { key: string; name: string; kind: string }[]
+    readBy?: { id: string; name?: string; count?: number; lastAt?: number }[]
+  }
+}
+export interface GraphNode { key: string; label: string; id: string; name?: string; status?: string; type?: string }
+export interface GraphEdge { from: string; to: string; type: string; predicate?: string; status?: string }
+export interface KeyEntity { key: string; name?: string; score: number; degree: number }
+export interface GraphView { nodes: GraphNode[]; edges: GraphEdge[]; counts: Record<string, number> }
 
 export interface StepResult {
   step: string; agent: string; outcome: string; taskId?: string; handoffId?: string; log: string[]; details: Record<string, unknown>

@@ -44,6 +44,8 @@ export interface RequestOptions {
   method?: string
   body?: unknown
   token?: string | null
+  /** Call as an agent: sends X-Agent-Key instead of the user's bearer token. */
+  agentKey?: string
   idempotencyKey?: string
   signal?: AbortSignal
 }
@@ -51,8 +53,9 @@ export interface RequestOptions {
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (options.body !== undefined) headers['Content-Type'] = 'application/json'
-  const token = options.token === undefined ? tokenStore.get() : options.token
+  const token = options.agentKey ? null : options.token === undefined ? tokenStore.get() : options.token
   if (token) headers.Authorization = `Bearer ${token}`
+  if (options.agentKey) headers['X-Agent-Key'] = options.agentKey
   if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey
 
   let response: Response

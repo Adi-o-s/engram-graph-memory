@@ -1,13 +1,17 @@
 package com.memora.context;
 
 import com.memora.conversation.ConversationDtos.MessageView;
+import com.memora.graph.GraphAlerts.Alert;
+import com.memora.graph.GraphPath;
 import com.memora.handoff.HandoffDtos.HandoffView;
 import com.memora.memory.MemoryDtos.MemoryView;
 import com.memora.task.TaskDtos.TaskView;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public final class ContextDtos {
@@ -17,15 +21,26 @@ public final class ContextDtos {
 
     public record ContextRequest(@Size(max = 1000) String query, UUID projectId, UUID conversationId, UUID taskId,
                                  @Min(1) @Max(50) Integer maxMemories, @Min(0) @Max(50) Integer maxMessages,
-                                 @Min(200) @Max(20000) Integer maxChars) {
+                                 @Min(200) @Max(20000) Integer maxChars,
+                                 @Pattern(regexp = "graph|hybrid|keyword") String retrieval) {
+
+        public ContextRequest(String query, UUID projectId, UUID conversationId, UUID taskId, Integer maxMemories,
+                              Integer maxMessages, Integer maxChars) {
+            this(query, projectId, conversationId, taskId, maxMemories, maxMessages, maxChars, null);
+        }
     }
 
     public record ContextStats(int chars, int maxChars, int memoriesIncluded, int memoriesOmitted, int messagesIncluded,
                                int messagesOmitted, boolean truncated) {
     }
 
+    /** How graph retrieval reached a memory: the path, its length and the score it earned. */
+    public record ContextPath(GraphPath path, int hops, double score, boolean reached) {
+    }
+
     public record ContextBundle(String query, TaskView task, HandoffView latestHandoff, List<MemoryView> facts,
                                 List<MemoryView> procedures, List<MemoryView> episodes, List<MessageView> messages,
-                                String rendered, ContextStats stats) {
+                                String rendered, ContextStats stats, String retrieval, Map<UUID, ContextPath> paths,
+                                List<Alert> alerts) {
     }
 }
