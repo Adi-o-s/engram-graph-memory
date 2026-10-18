@@ -1,7 +1,8 @@
 # Architecture
 
-Memora is a modular monolith: one Spring Boot service, one PostgreSQL database, one React dashboard.
-No message broker, cache or orchestrator is needed at this scale, and every moving part runs locally.
+Memora is a modular monolith: one Spring Boot service, PostgreSQL as the transactional system of record,
+FalkorDB as the memory and coordination graph (one graph per tenant), and one React dashboard. No message broker,
+cache or orchestrator is needed at this scale, and every moving part runs locally.
 
 ```
  Browser (React dashboard)          AI agents / scripts
@@ -15,10 +16,14 @@ No message broker, cache or orchestrator is needed at this scale, and every movi
   │ identity · project · conversation · extraction · memory       │
   │ context · agent · task · handoff · audit · overview · demo · lab │
   └───────────────────────────────────────────────────────────────┘
-                       ▼  HikariCP (pool 20)
-         PostgreSQL 16: Flyway migrations, FTS (tsvector + GIN),
-         pg_trgm keyword index, JSONB, FORCE ROW LEVEL SECURITY
+          writes ▼  HikariCP (pool 20)            reads that matter ▼  JFalkorDB (GRAPH.RO_QUERY)
+ PostgreSQL 16: Flyway, FORCE ROW LEVEL SECURITY,        FalkorDB 4.14: graph memora_t_<tenant>
+ versions, leases, JSONB, FTS fallback                   context traversal · explain paths ·
+     │ triggers write graph_outbox in the same tx        stale-knowledge alerts · graph tools
+     └──── GraphProjector (FOR UPDATE SKIP LOCKED, UNWIND … MERGE) ────▶
 ```
+
+See the README ("Graph data model", "Why two databases") and [GRAPH_QUERIES.md](GRAPH_QUERIES.md).
 
 ## Modules (`backend/src/main/java/com/memora`)
 
@@ -38,6 +43,7 @@ No message broker, cache or orchestrator is needed at this scale, and every movi
 | `audit`, `overview` | Audit trail and dashboard metrics |
 | `demo` | Seed data and three deterministic agents (Planner, Developer, Tester) |
 | `lab` | In-process concurrency workloads with invariant checks |
+| `graph` | FalkorDB: `GraphClient` (parameterised Cypher, RO queries, timers), `TenantGraphs` (graph per tenant, indexes), `GraphOutbox` + `GraphProjector` (outbox → graph), `GraphProjection` (MERGE statements), `GraphContextRetriever` (context by traversal), `GraphExplainService` (paths, provenance, explorer), `GraphAlerts` (stale knowledge), `GraphInsights` (who-knows, impact), `GraphRebuildService`, `GraphHealthIndicator` |
 
 ## Data model
 
@@ -116,7 +122,8 @@ directly through `POST /api/v1/memories`.
 | Retried POSTs | `Idempotency-Key` header; unique `(tenant_id, idempotency_key)` per table returns the original record |
 | Counters | Atomic SQL increments (agent handoff counts, memory access counts) |
 | Crashed agents | Handoff leases and recovery job; retries up to `maxAttempts`, then dead letter |
-| Restarts | All state is in PostgreSQL; verified by `PersistenceRestartIT` and a container restart |
+| Restarts | All state is in PostgreSQL; verified by `PersistenceRestartIT` and a container restart. The graph persists in FalkorDB (RDB + AOF on a named volume, `GraphRestartIT`) and can be rebuilt from PostgreSQL (`POST /api/admin/graph/rebuild`) |
+| Graph consistency | Transactional outbox written by triggers in the writing transaction; projector claims with `FOR UPDATE SKIP LOCKED`, idempotent MERGE, exponential backoff, FAILED after 10 attempts; readers apply their tenant's pending rows first (read-your-writes); health shows outbox lag |
 
 ## API
 
