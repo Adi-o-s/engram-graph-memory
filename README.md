@@ -20,7 +20,7 @@ matter read from that graph:
 - **Key entities** are ranked with FalkorDB's `algo.pageRank` over the entity graph (`GET /api/graph/key-entities`).
 - **Tenants are separate graphs** (`memora_t_<tenant>`) in one FalkorDB, chosen only from the authenticated caller.
 
-**Demo video:** VIDEO_LINK_HERE · **For judges:** [docs/JUDGE_BRIEF.md](docs/JUDGE_BRIEF.md)
+**Demo video (2:53, 1080p):** [docs/demo/memora-demo.mp4](https://github.com/Adi-o-s/engram-graph-memory/blob/main/docs/demo/memora-demo.mp4) · **For judges:** [docs/JUDGE_BRIEF.md](docs/JUDGE_BRIEF.md)
 
 Turn FalkorDB off and context assembly, explanations, alerts and the graph tools stop working: the graph is the
 read path, not a viewer on top of SQL.
@@ -268,4 +268,4 @@ README, working from the team's written specifications. The team set the goals, 
 criteria (zero cost, tenant isolation, "never fabricate" numbers), chose the architecture, ran the builds and the
 app on their own machines, reviewed the pull requests and decided what to merge.
 
-TEAM: confirm/edit the paragraph above so it describes exactly what you did, and add your names.
+Team: Adi ([@Adi-o-s](https://github.com/Adi-o-s)).
