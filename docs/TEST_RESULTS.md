@@ -1,5 +1,98 @@
 # Test results
 
+## FalkorDB graph memory (run on 2026-10-18)
+
+Run in the build environment: a Linux container with 4 vCPUs and 15 GB RAM, OpenJDK 21.0.12, Maven 3.9.11,
+Node 22.22, PostgreSQL 16.15, FalkorDB `falkordb/falkordb:v4.14.6` in Docker (container named `falkor`). The
+backend, both databases, the browser and the load all shared the same 4 CPUs, and the host was visibly
+contended during part of the session, so treat latencies as rough. Nothing here is estimated.
+
+| Suite | Command | Result |
+|---|---|---|
+| Backend unit + integration | `MEMORA_TEST_DB_URL=jdbc:postgresql://localhost:5432/memora_test MEMORA_TEST_FALKORDB_URL=redis://localhost:6379 MEMORA_TEST_FALKORDB_CONTAINER=falkor mvn -B test` | **145 passed**, 0 failed, 0 skipped (134 existing + 11 new) |
+| Dashboard unit/component | `cd frontend && npm test` | **15 passed** |
+| Dashboard type check + build | `npm run build` | passed |
+| Browser end-to-end | `npm run build && npm run preview`, then `PLAYWRIGHT_CHROMIUM_PATH=… npx playwright test` against the local backend + FalkorDB | **12 passed** (11 existing + `e2e/graph.spec.ts`) |
+
+Without the three `MEMORA_TEST_*` variables the same tests start PostgreSQL and FalkorDB with Testcontainers;
+that path was not run here.
+
+| New class | Tests | What it checks |
+|---|---|---|
+| `GraphMemoryIT` | 7 | projection and idempotent replay; graph context finds a 2-hop fact keyword search misses, with its path and explain provenance; a revised fact supersedes the old node and leaves context; the agent that read a changed fact is alerted once and one that did not is not; tenants have separate graphs and forged ids find nothing; key entities ranked by PageRank; rebuild from PostgreSQL gives identical counts, members get 403 |
+| `GraphRestartIT` | 1 | `docker restart` of FalkorDB: the graph survives and projection resumes |
+| `GraphQueriesDocTest` | 1 | `docs/GRAPH_QUERIES.md` contains every Cypher constant in the code verbatim |
+| `RetrievalEvalIT` | 1 | the retrieval eval below |
+| `ProjectorThroughputIT` | 1 | the projector measurement below |
+
+Two existing tests changed because the schema intentionally changed: `MigrationIT` expects migrations 1–5 and
+forced RLS on `graph_outbox`. All graph tests run against a real FalkorDB v4.14.6, not a mock.
+
+### Retrieval eval: graph vs keyword
+
+`RetrievalEvalIT` builds one project through the API: 12 services, each with three direct facts
+("X uses DynamoDB", "X uses Kafka", "X deploys through Jenkins"), plus one hosting fact per technology
+("Kafka is hosted on Confluent Cloud"), 45 memories in all. The query for service X is "fix the X outage". Its
+relevant set is its 3 direct facts plus the 3 hosting facts of its technologies, which never mention X and are
+two hops away in the graph. recall@k is the share of the relevant facts in the first k facts of
+`POST /api/v1/context`, with `retrieval` set per request. **The dataset is synthetic and built to contain
+multi-hop facts, which is the case graph retrieval is for**; it shows where each mode's recall comes from, not
+how Memora does on your data.
+
+Command: `MEMORA_TEST_DB_URL=… MEMORA_TEST_FALKORDB_URL=redis://localhost:6379 mvn -B test -Dtest=RetrievalEvalIT`
+(prints the table and writes `backend/target/retrieval-eval.md`). Result from the full-suite run above:
+
+| Mode | k | recall@k (all) | direct facts | 2-hop facts | mean latency (ms) |
+|---|---|---|---|---|---|
+| graph | 3 | 0.50 | 1.00 | 0.00 | 194.6 |
+| graph | 6 | **0.97** | 1.00 | 0.94 | 119.4 |
+| graph | 10 | **1.00** | 1.00 | 1.00 | 135.6 |
+| hybrid | 3 | 0.50 | 1.00 | 0.00 | 196.1 |
+| hybrid | 6 | 0.97 | 1.00 | 0.94 | 245.2 |
+| hybrid | 10 | 1.00 | 1.00 | 1.00 | 286.8 |
+| keyword | 3 | 0.50 | 1.00 | 0.00 | 171.7 |
+| keyword | 6 | **0.50** | 1.00 | 0.00 | 76.0 |
+| keyword | 10 | **0.50** | 1.00 | 0.00 | 53.3 |
+
+- An earlier standalone run of the same test (`-Dtest=RetrievalEvalIT`, with MongoDB where the final version
+  uses DynamoDB) gave graph recall@6 **1.00** and mean latencies of 29–44 ms for graph and about 17 ms for
+  keyword at k = 6 and 10. The 0.94 above comes from ties
+  at two hops between the hosting facts and other services' facts that mention the same technology.
+- Latency is measured around the HTTP call in the test and includes the read-your-writes catch-up and the
+  PostgreSQL re-check. Graph context is slower than keyword context.
+- The **first** run of this eval, before a scoring change, gave graph recall@6 **0.22** (keyword 0.50): full-text
+  hits on common words such as "service" scored like direct entity hits and crowded the budget. Full-text and
+  fill-up hits now score like 3 extra hops (`GraphContextRetriever.TEXT_WEIGHT`), so a memory reached by edges
+  outranks one that only shares a word with the query.
+
+### Projector throughput and outbox lag
+
+`ProjectorThroughputIT`: 8 client threads write 400 memories through `POST /api/v1/memories` while a sampler
+reads the outbox lag every 20 ms. Only the background projector (poll every 250 ms, batches of 200) drains the
+outbox. Command: `… mvn -B test -Dtest=ProjectorThroughputIT` (writes `backend/target/projector-throughput.md`).
+Result from the full-suite run:
+
+| Measure | Value |
+|---|---|
+| Memories written through the API (8 threads) | 400 |
+| Outbox rows applied by the projector | 400 |
+| Write phase (all API calls returned) | 4.94 s (81 writes/s) |
+| Outbox empty after the last write returned | 237 ms |
+| Rows applied per second over the run (bounded by the write rate) | 77 rows/s |
+| Highest pending rows seen (sampled every 20 ms) | 110 |
+| Oldest pending row age, highest seen | 1514 ms |
+| New FAILED rows | 0 |
+
+The projector kept up with the API: the graph was at most about 1.5 s behind PostgreSQL during the burst and
+caught up within 237 ms of the last write. Context reads do not wait for the poller; they apply their tenant's
+pending rows first. This does not measure the projector's ceiling, because the write rate was the bottleneck.
+
+Not verified: `docker compose up --build` from a clean clone with the FalkorDB service (the build sandbox could
+not download dependencies inside image builds), several backend instances sharing one outbox, and FalkorDB
+under sustained load beyond this burst.
+
+---
+
 ## Memora 2.0 orchestration (run on 2026-10-18)
 
 Run on a Windows 11 laptop with Docker Desktop. Backend tests ran in an `eclipse-temurin:21-jdk` container against

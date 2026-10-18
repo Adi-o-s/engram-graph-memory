@@ -17,7 +17,10 @@ matter read from that graph:
   each affected agent opens with "⚠ Changed since you last read it".
 - **Who-knows-what and impact analysis** are graph tools agents call inside workflows
   (`graph.who_knows`, `graph.impact`, `graph.neighbors`, `graph.explain`).
+- **Key entities** are ranked with FalkorDB's `algo.pageRank` over the entity graph (`GET /api/graph/key-entities`).
 - **Tenants are separate graphs** (`memora_t_<tenant>`) in one FalkorDB, chosen only from the authenticated caller.
+
+**Demo video:** VIDEO_LINK_HERE · **For judges:** [docs/JUDGE_BRIEF.md](docs/JUDGE_BRIEF.md)
 
 Turn FalkorDB off and context assembly, explanations, alerts and the graph tools stop working: the graph is the
 read path, not a viewer on top of SQL.
@@ -36,10 +39,39 @@ account or credit card, and every runtime dependency is open source. See
 | Episodic, semantic and procedural memory | `(:Memory {type})` nodes linked to `(:Entity)` by `ABOUT`/`MENTIONS`; facts are also `RELATES` edges between entities, so they chain across hops | `GraphMemoryIT.graphRetrievalFindsATwoHopFactThatKeywordSearchMisses` |
 | Persistent conversation history | `(Memory)-[:EXTRACTED_FROM]->(Message)-[:IN]->(Conversation)`; FalkorDB data on a named volume with AOF | `GraphRestartIT`, `GraphMemoryIT` (explain provenance) |
 | Shared state and handoffs between agents | `(Handoff)-[:FROM/TO]->(Agent)`, `-[:FOR]->(Task)`, `-[:CARRIES]->(Memory)`; `(Agent)-[:READ]->(Memory)`; stale-knowledge alerts | `GraphMemoryIT.anAgentThatReadAChangedFactIsWarnedAndOneThatDidNotIsNot` |
-| High-concurrency reads and writes | PostgreSQL takes the concurrent writes (advisory locks, unique indexes); the projector drains the outbox with `FOR UPDATE SKIP LOCKED`, idempotent `UNWIND … MERGE` batches | `ConcurrentWritesIT`, `TaskConcurrencyIT`, `GraphMemoryIT.aMemoryWrittenInPostgresIsProjectedAndReplayIsIdempotent` |
+| High-concurrency reads and writes | PostgreSQL takes the concurrent writes (advisory locks, unique indexes); the projector drains the outbox with `FOR UPDATE SKIP LOCKED`, idempotent `UNWIND … MERGE` batches | `ConcurrentWritesIT`, `TaskConcurrencyIT`, `ProjectorThroughputIT`, `GraphMemoryIT.aMemoryWrittenInPostgresIsProjectedAndReplayIsIdempotent` |
 | Separate memory per user or tenant | One graph per tenant; personal (USER-scoped) memories filtered in every Cypher query and re-checked in PostgreSQL | `GraphMemoryIT.tenantsHaveSeparateGraphsAndForgedIdsFindNothing`, `TenantIsolationIT` |
 | Remember across sessions | Graph persists across FalkorDB restarts and can be rebuilt from PostgreSQL at any time | `GraphRestartIT`, `GraphMemoryIT.rebuildReconstructsTheSameGraphFromPostgres` |
-| Show the path behind an answer | Every context memory carries its graph path; `/api/graph/explain` | `GraphMemoryIT` |
+| Show the path behind an answer | Every context memory carries its graph path; `/api/graph/explain` | `GraphMemoryIT`, `e2e/graph.spec.ts` |
+
+## Measured results
+
+Every number here comes from a test in this repo; the commands, the full tables and what was not verified are in
+[docs/TEST_RESULTS.md](docs/TEST_RESULTS.md#falkordb-graph-memory-run-on-2026-10-18).
+
+- **Tests:** 145 backend tests (JUnit 5, real PostgreSQL and FalkorDB), 15 Vitest tests and 12 Playwright browser
+  tests pass.
+- **Retrieval eval** (`RetrievalEvalIT`, a synthetic project of 12 services, each query with 3 direct and 3
+  two-hop relevant facts): recall@6 is **0.97 for graph retrieval and 0.50 for keyword retrieval**; at k=10 graph
+  reaches 1.00 and keyword stays at 0.50, because keyword search never finds the two-hop facts. Graph context is
+  slower than keyword context in the same run. The first run of this eval found a scoring bug (graph recall@6
+  0.22), which is described in the results doc.
+- **Projector** (`ProjectorThroughputIT`, 400 memories from 8 concurrent writers): the graph was at most about
+  1.5 s behind PostgreSQL during the burst, the outbox was empty 237 ms after the last write, and no row failed.
+
+## See it
+
+![Graph walkthrough in the guided demo](docs/screenshots/20-graph-walkthrough.png)
+
+The **Guided demo** opens with a five-step graph walkthrough: ingest a conversation, see the entities appear, get
+agent context with paths (one fact two hops away), change a fact and see the alert reach only the agent that read
+it, and compare the Acme and Globex graphs. **Memory graph** shows the tenant graph and its PageRank key entities.
+
+![Memory graph page](docs/screenshots/21-memory-graph.png)
+
+The same Acme graph in FalkorDB Browser, which `docker compose up` starts next to the database:
+
+![FalkorDB Browser showing the Acme tenant graph](docs/screenshots/22-falkordb-browser.png)
 
 ## Graph data model
 
@@ -95,9 +127,9 @@ are re-checked against PostgreSQL (RLS and personal scope) before anything reach
 | | |
 |---|---|
 | Backend | Java 21, Spring Boot 3.5, Spring Security (JWT + agent API keys), JPA, Flyway, PostgreSQL 16, FalkorDB 4.14 (JFalkorDB 0.14) |
-| Dashboard | React 19, TypeScript, Vite, Tailwind CSS 4, React Router, Recharts |
+| Dashboard | React 19, TypeScript, Vite, Tailwind CSS 4, React Router, Recharts, react-force-graph-2d |
 | Ops | Docker Compose, Maven Wrapper, npm lockfile |
-| Tests | 134 backend tests (JUnit 5, real PostgreSQL), 15 Vitest tests, 11 Playwright browser tests, HTTP load test |
+| Tests | 145 backend tests (JUnit 5, real PostgreSQL and FalkorDB), 15 Vitest tests, 12 Playwright browser tests, HTTP load test |
 
 ## Quick start (Docker)
 
@@ -123,8 +155,9 @@ Sign in with a demo account (password `memora-demo`):
 | bob@globex.test | Globex Health | admin |
 | casey@consultant.test | both | member, switches tenants |
 
-Then open **Guided demo** and click through the five steps. [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
-has a presenter script.
+Then open **Guided demo** and click **Go** on steps A–E of the graph walkthrough.
+[docs/DEMO_VIDEO_SCRIPT.md](docs/DEMO_VIDEO_SCRIPT.md) is a 3-minute presenter script for it;
+[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) covers the rest of the dashboard.
 
 Port clash? If host port 3001 is already used (for example you run the dashboard on 3001 with
 `MEMORA_UI_PORT=3001`), set `MEMORA_FALKORDB_BROWSER_PORT=3002` in `.env`.
@@ -184,6 +217,10 @@ verification reports, not working application code; assign implementation steps 
 
 ## Documentation
 
+- [docs/JUDGE_BRIEF.md](docs/JUDGE_BRIEF.md): one page for judges, what to look at and where
+- [docs/GRAPH_QUERIES.md](docs/GRAPH_QUERIES.md): every Cypher statement, verbatim, and what it is for
+- [docs/DEMO_VIDEO_SCRIPT.md](docs/DEMO_VIDEO_SCRIPT.md): the 3-minute graph demo
+
 - [docs/ORCHESTRATION_AUDIT.md](docs/ORCHESTRATION_AUDIT.md): what Memora 1.0 could and could not do, and the plan
 - [docs/ORCHESTRATION_ARCHITECTURE.md](docs/ORCHESTRATION_ARCHITECTURE.md): engine, data model, guarantees, API
 - [docs/AGENT_DEFINITIONS.md](docs/AGENT_DEFINITIONS.md): configurable agents, memory scopes, executors, templates
@@ -222,3 +259,13 @@ The guided demo's agents are built in. To run a flow with an agent you registere
 which acknowledges it with its own key, reads context, records findings and hands the task back. Each step is one
 API call, so it doubles as a template. Run it with `REVIEWER_KEY=mem_... scripts/reviewer-flow.sh` (add `STEP=1`
 to pause after each step), then watch the result in Tasks & handoffs.
+
+## AI disclosure
+
+This project was built with heavy use of AI. Claude (through Claude Code) wrote a large share of the code, tests
+and documentation, including the FalkorDB integration, the dashboard graph features, the evaluations and this
+README, working from the team's written specifications. The team set the goals, constraints and acceptance
+criteria (zero cost, tenant isolation, "never fabricate" numbers), chose the architecture, ran the builds and the
+app on their own machines, reviewed the pull requests and decided what to merge.
+
+TEAM: confirm/edit the paragraph above so it describes exactly what you did, and add your names.
