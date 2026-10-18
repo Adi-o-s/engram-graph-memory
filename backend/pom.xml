@@ -20,6 +20,8 @@
     <properties>
         <java.version>21</java.version>
         <springdoc.version>2.8.17</springdoc.version>
+        <!-- jfalkordb 0.14.0 is built against Jedis 8; override Spring Boot's managed version. -->
+        <jedis.version>8.0.2</jedis.version>
     </properties>
 
     <dependencies>
@@ -64,6 +66,11 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.falkordb</groupId>
+            <artifactId>jfalkordb</artifactId>
+            <version>0.14.0</version>
         </dependency>
 
         <dependency>

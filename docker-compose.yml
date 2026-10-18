@@ -1,7 +1,9 @@
-# Memora: PostgreSQL + Spring Boot API + dashboard. Everything runs locally; no API keys or cloud accounts.
+# Memora: PostgreSQL (system of record) + FalkorDB (memory graph) + Spring Boot API + dashboard.
+# Everything runs locally; no API keys or cloud accounts.
 #   cp .env.example .env   # then set MEMORA_JWT_SECRET and the passwords
 #   docker compose up --build
 # Dashboard: http://localhost:3000   API: http://localhost:8080   Swagger UI: http://localhost:8080/swagger-ui.html
+# FalkorDB Browser: http://localhost:3001 (connect to host "falkordb" or "localhost", port 6379)
 name: memora
 
 services:
@@ -24,12 +26,36 @@ services:
       timeout: 3s
       retries: 30
 
+  falkordb:
+    # Pinned: the Cypher in docs/GRAPH_QUERIES.md was verified against this version.
+    image: falkordb/falkordb:v4.14.6
+    environment:
+      # Append-only file on top of RDB snapshots, so the graph survives restarts (remember across sessions).
+      REDIS_ARGS: ${MEMORA_FALKORDB_REDIS_ARGS:---appendonly yes}
+    volumes:
+      - memora-falkordb:/var/lib/falkordb/data
+    ports:
+      - "${MEMORA_FALKORDB_PORT:-6379}:6379"
+      # The image serves the FalkorDB Browser on container port 3000; the dashboard already uses host 3000.
+      - "${MEMORA_FALKORDB_BROWSER_PORT:-3001}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
   backend:
     build: ./backend
     depends_on:
       postgres:
         condition: service_healthy
+      falkordb:
+        condition: service_healthy
     environment:
+      MEMORA_FALKORDB_HOST: falkordb
+      MEMORA_FALKORDB_PORT: 6379
+      MEMORA_FALKORDB_PASSWORD: ${MEMORA_FALKORDB_PASSWORD:-}
+      MEMORA_CONTEXT_RETRIEVAL: ${MEMORA_CONTEXT_RETRIEVAL:-graph}
       MEMORA_DB_URL: jdbc:postgresql://postgres:5432/${MEMORA_DB_NAME:-memora}
       MEMORA_DB_USER: ${MEMORA_DB_USER:-memora}
       MEMORA_DB_PASSWORD: ${MEMORA_DB_PASSWORD}
@@ -56,3 +82,4 @@ services:
 
 volumes:
   memora-pgdata:
+  memora-falkordb:
