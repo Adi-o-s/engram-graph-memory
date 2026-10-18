@@ -1,5 +1,45 @@
 # Test results
 
+## Memora 2.0 orchestration (run on 2026-10-18)
+
+Run on a Windows 11 laptop with Docker Desktop. Backend tests ran in an `eclipse-temurin:21-jdk` container against
+a dedicated `postgres:16-alpine` container with a non-superuser role (`MEMORA_TEST_DB_URL`), so the application's
+own database was never touched. Dashboard build and Vitest ran in `node:22`; Playwright ran in the official
+`playwright:v1.56.1-noble` image against the running Docker Compose stack.
+
+| Suite | Result |
+|---|---|
+| Baseline before any change | **93 passed**, 0 failed |
+| Backend unit + integration after the change (`./mvnw test`) | **134 passed**, 0 failed, 0 skipped (93 existing + 41 new) |
+| Dashboard type check + production build | passed |
+| Dashboard unit/component (Vitest) | **15 passed** (11 existing + 4 new) |
+| Browser end-to-end (Playwright) against the Docker stack | **11 passed** (8 existing + 3 new) |
+| Migration on the existing Docker database (v3 → v4) | applied cleanly; existing data kept; defaults installed for both tenants |
+| Hard kill of the backend container mid-step (`docker compose kill backend`) | step detected at startup (`lease_expired`), retried, run SUCCEEDED; completed steps not re-run |
+
+Two existing tests were updated because the schema intentionally changed: `MigrationIT` now expects migrations
+1–4 and checks forced row-level security on the 10 new tables as well.
+
+| New class | Tests | What it checks |
+|---|---|---|
+| `WorkflowDemoIT` | 3 | full-stack delivery (parallel layers, dependent waits, QA loop + remediation, conditional skip, approval, completion criteria, artifacts, tasks, handoffs, decisions in memory); research workflow on the same engine with different agents (fact-check loop, report v2); classic Planner/Developer/Tester as configuration |
+| `WorkflowEngineIT` | 9 | parallel vs dependent steps with timestamps, conditional routing with traces, bounded retries with injected faults, permanent failures not retried, exhausted retries block downstream until a manual retry, completion criteria decide success, pause/resume without re-running, cancel, loop exhaustion, graph/reference/input validation, external agent completes a step through the handoff API |
+| `AgentDefinitionIT` | 5 | create/update/duplicate/activate/version, stale writes, invalid tools/capabilities/executors/policies/schemas, instructions cannot grant permissions, templates/tools/executors, member restrictions, seeded agents linked |
+| `OrchestrationSecurityIT` | 6 | cross-tenant access to every new resource returns 404, members cannot administer or approve, out-of-policy memory access denied and audited, approval-gated and unavailable tools, secrets refused and redacted, handoff isolation |
+| `WorkflowMemoryIT` | 3 | later runs see project decisions but never another run's working memory, provenance, architect follows the current (superseded) database fact, USER scope means the starter only |
+| `WorkflowRecoveryIT` | 2 | 8 concurrent claimers racing the scheduler never claim a step twice; expired lease retried and late/forged results ignored |
+| `WorkflowRestartIT` | 1 | stop one backend, simulate a crashed step, start another: completed steps kept, crashed step recovered, run resumed |
+| `ExpressionsAndConditionsTest`, `RequirementExtractorTest`, `WorkspaceToolsTest`, `TaskPathTest` | 12 | templates and fallbacks, conditions, schema subset, requirement extraction, path traversal and symlink escape, task transitions |
+
+Not verified: multiple backend instances against one database (the claim and fencing logic is designed for it and
+tested with concurrent claimers in one process; set `memora.workflow.recover-on-startup=false` in that setup),
+`command.run` with a real allow-listed command (covered only as unavailable/denied), and load testing of the
+workflow engine.
+
+---
+
+## Memora 1.0
+
 Everything below was actually run on 2026-10-16 in the build environment: a Linux container with 4 vCPUs and
 15 GB RAM, OpenJDK 21.0.12, Node 22.22, PostgreSQL 16.15. The backend, database and load generator shared the
 same 4 CPUs, so absolute numbers are modest and will differ on your machine. Nothing here is estimated.

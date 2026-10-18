@@ -1,6 +1,14 @@
 # Memora
 
-Shared memory infrastructure for AI agents. Agents and people write to one PostgreSQL-backed memory:
+**Memora 2.0: a general-purpose multi-agent orchestration platform built on shared memory.** Define your own
+agents (role, instructions, tools, memory scopes, schemas) and workflows (dependencies, parallel steps,
+conditions, bounded loops, retries, approvals, completion criteria), and run them on one persisted engine.
+Describe a goal and the rule-based planner proposes a workflow you can edit. Software delivery and research
+reports ship as examples; both run on the same engine with entirely different agents. See
+[docs/ORCHESTRATION_ARCHITECTURE.md](docs/ORCHESTRATION_ARCHITECTURE.md) and the
+[orchestration demo](docs/ORCHESTRATION_DEMO.md).
+
+Underneath is the shared memory infrastructure for AI agents. Agents and people write to one PostgreSQL-backed memory:
 conversations are stored verbatim, a rule-based extractor turns them into episodic, semantic and
 procedural memories, newer facts supersede older ones while keeping history, and agents coordinate
 through versioned tasks and structured handoffs. Every tenant is isolated in the application and again
@@ -15,7 +23,7 @@ account or credit card, and every runtime dependency is open source. See
 | Backend | Java 21, Spring Boot 3.5, Spring Security (JWT + agent API keys), JPA, Flyway, PostgreSQL 16 |
 | Dashboard | React 19, TypeScript, Vite, Tailwind CSS 4, React Router, Recharts |
 | Ops | Docker Compose, Maven Wrapper, npm lockfile |
-| Tests | 93 backend tests (JUnit 5, real PostgreSQL), 11 Vitest tests, 8 Playwright browser tests, HTTP load test |
+| Tests | 134 backend tests (JUnit 5, real PostgreSQL), 15 Vitest tests, 11 Playwright browser tests, HTTP load test |
 
 ## Quick start (Docker)
 
@@ -80,7 +88,26 @@ scripts/reset-db.sh docker   # Docker: deletes the volume and starts fresh with 
 scripts/reset-db.sh local    # local PostgreSQL: drops and recreates the memora database
 ```
 
+## Orchestration in two minutes
+
+Sign in, open **Plan a workflow**, pick **E-commerce website**, click **Propose a workflow**, then **Save and run
+now**. Watch the run's graph (parallel steps, a skipped conditional step, a QA loop that closes a real coverage gap),
+inspect any step, approve the handover, and open the artifacts. Then run **Research and report** in the project
+*Search engine evaluation* to see different agents on the same engine.
+
+What is and is not intelligent here: agents are **configurations** executed by a deterministic template executor
+(tool calls over memory, artifacts and checks) or by an **external** agent through its inbox. Memora calls no
+model. The software-delivery agents produce requirements, contracts, a design spec, a schema scaffold, plans and
+verification reports, not working application code; assign implementation steps to an external agent for that.
+
 ## Documentation
+
+- [docs/ORCHESTRATION_AUDIT.md](docs/ORCHESTRATION_AUDIT.md): what Memora 1.0 could and could not do, and the plan
+- [docs/ORCHESTRATION_ARCHITECTURE.md](docs/ORCHESTRATION_ARCHITECTURE.md): engine, data model, guarantees, API
+- [docs/AGENT_DEFINITIONS.md](docs/AGENT_DEFINITIONS.md): configurable agents, memory scopes, executors, templates
+- [docs/WORKFLOW_BUILDER.md](docs/WORKFLOW_BUILDER.md): workflow specs, validation, running
+- [docs/TOOL_SECURITY.md](docs/TOOL_SECURITY.md): tool authorisation, isolation, secrets
+- [docs/ORCHESTRATION_DEMO.md](docs/ORCHESTRATION_DEMO.md): the 8-minute orchestration demo
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): modules, data model, isolation, concurrency, API
 - [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md): installation, configuration, troubleshooting

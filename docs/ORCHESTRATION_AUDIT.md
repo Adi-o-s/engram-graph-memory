@@ -128,3 +128,17 @@ updated row by row, so they are normalized tables with indexes for the scheduler
 | F | Memory scopes `WORKFLOW`, `RUN`, `AGENT`; memory policy; artifacts in context | scoped retrieval tests including cross-run and cross-tenant |
 | G | Security, concurrency, recovery and end-to-end tests | all new and existing tests pass |
 | H | Two demos (software delivery, research report) on the same engine; documentation; cost audit | both demos complete through the engine with no special-case code |
+
+## 11. Outcome (after implementation)
+
+All phases B–H were implemented on branch `claude/memora-orchestration` as proposed above, with these deviations:
+
+* The API also gained `GET /workflow-runs/{id}/tool-calls`, `POST …/steps/{stepId}/complete` (external results),
+  `POST /workflows/{id}/archive|restore` and `GET /projects/{id}/workspace`.
+* Step inputs and outputs are redacted before they are stored (the executor still receives real values).
+* Task-board and handoff updates are applied after the engine's commit in separate transactions, so a conflicting
+  board edit can never roll back a step result.
+* Test data note: the new memory test uses SQLite rather than MongoDB as its "new database", because an existing
+  isolation test treats MongoDB as a Globex-only marker.
+
+Results: 134/134 backend tests, 15/15 Vitest, 11/11 Playwright; see [TEST_RESULTS.md](TEST_RESULTS.md).

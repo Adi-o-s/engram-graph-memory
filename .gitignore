@@ -29,3 +29,4 @@ frontend/playwright-report/
 data/
 pgdata/
 load-test-results/*.json
+frontend/e2e-shots/
