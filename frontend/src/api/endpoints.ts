@@ -2,7 +2,7 @@ import { qs, request, newIdempotencyKey } from './client'
 import type {
   Agent, AuditEvent, ContextBundle, Conversation, DemoAccounts, Handoff, History, IngestResult, LabResult, LabScenario,
   LoginResponse, Me, Memory, MemoryType, MemoryWriteResult, Message, Overview, Page, Project, RegisteredAgent, RunStatus,
-  SearchResult, StepResult, Task, TaskEvent, TaskStatus, TeachResult,
+  SearchResult, StepResult, Task, TaskEvent, TaskStatus, TeachResult, Explanation, GraphAlert, GraphView,
 } from './types'
 
 const V1 = '/api/v1'
@@ -45,7 +45,14 @@ export const api = {
   summarize: (id: string) => request<Conversation>(`${V1}/conversations/${id}/summarize`, { method: 'POST' }),
 
   // context
-  context: (body: Record<string, unknown>) => request<ContextBundle>(`${V1}/context`, { body }),
+  context: (body: Record<string, unknown>, agentKey?: string) => request<ContextBundle>(`${V1}/context`, { body, agentKey }),
+
+  // memory graph (FalkorDB, one graph per tenant)
+  explain: (memoryId: string, from?: string) => request<Explanation>(`${V1}/graph/explain${qs({ memoryId, from })}`),
+  graphAlerts: (limit = 50) => request<GraphAlert[]>(`${V1}/graph/alerts${qs({ limit })}`),
+  graphView: (label?: string, limit = 400, token?: string) => request<GraphView>(`${V1}/graph/view${qs({ label, limit })}`, { token }),
+  graphNeighbours: (id: string) => request<GraphView>(`${V1}/graph/neighbours${qs({ id })}`),
+  rebuildGraph: () => request<Record<string, unknown>>(`${V1}/admin/graph/rebuild`, { method: 'POST' }),
 
   // agents
   agents: () => request<Agent[]>(`${V1}/agents`),

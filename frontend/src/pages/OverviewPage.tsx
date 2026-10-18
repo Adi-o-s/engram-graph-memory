@@ -4,6 +4,7 @@ import { api } from '../api/endpoints'
 import type { HandoffStatus, MemoryStatus, MemoryType, TaskStatus } from '../api/types'
 import { Badge, Button, Card, Empty, ErrorBox, Mono, PageHeader, Spinner, Stat, StatusBadge } from '../components/ui'
 import { useAsync, useInterval } from '../lib/useAsync'
+import { StaleAlertsCard } from '../components/GraphBits'
 import { ms, shortId, timeAgo, titleCase } from '../lib/format'
 
 const MEMORY_TYPES: MemoryType[] = ['SEMANTIC', 'EPISODIC', 'PROCEDURAL']
@@ -59,6 +60,7 @@ export function OverviewPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
+        <div className="lg:col-span-2"><StaleAlertsCard /></div>
         <Card title="Memory by type and status">
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">

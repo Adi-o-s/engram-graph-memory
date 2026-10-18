@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import {
-  LayoutDashboard, PlayCircle, Brain, MessagesSquare, Bot, KanbanSquare, ShieldCheck, Gauge, LogOut, Database,
+  LayoutDashboard, PlayCircle, Brain, Network, MessagesSquare, Bot, KanbanSquare, ShieldCheck, Gauge, LogOut, Database,
   Sparkles, Activity, Workflow, Users, FolderKanban,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -16,6 +16,7 @@ const NAV: { to: string; label: string; icon: typeof LayoutDashboard; end?: bool
   { to: '/agent-studio', label: 'Agent studio', icon: Users },
   { to: '/workspace', label: 'Project workspace', icon: FolderKanban },
   { to: '/demo', label: 'Guided demo (1.0)', icon: PlayCircle, group: 'Memory & coordination' },
+  { to: '/graph', label: 'Memory graph', icon: Network },
   { to: '/memories', label: 'Memory explorer', icon: Brain },
   { to: '/conversations', label: 'Conversations', icon: MessagesSquare },
   { to: '/agents', label: 'Agent workspace', icon: Bot },

@@ -2,7 +2,7 @@
 
 **Result: Memora has no runtime cost and no paid dependency.** It makes no outbound network calls at runtime
 (no model APIs, telemetry or license checks). Checked by reading `pom.xml`, `package.json` and the source:
-the only network connections the backend opens are to PostgreSQL; the dashboard talks only to the backend.
+the only network connections the backend opens are to PostgreSQL and FalkorDB; the dashboard talks only to the backend.
 
 ## Runtime dependencies
 
@@ -18,6 +18,10 @@ the only network connections the backend opens are to PostgreSQL; the dashboard 
 | PostgreSQL 16 (+ `pg_trgm` contrib extension) | PostgreSQL Licence | free |
 | React 19, React Router 7, Recharts 3, Vite, Tailwind CSS 4 | MIT | free |
 | lucide-react icons | ISC | free |
+| FalkorDB v4.14.6 (`falkordb/falkordb` image, includes FalkorDB Browser) | Server Side Public License v1 | free to self-host; SSPL only adds obligations if you offer FalkorDB itself as a service |
+| JFalkorDB 0.14.0 (Java driver) | BSD-3-Clause | free |
+| Jedis 8.0.2 (used by JFalkorDB) | MIT | free |
+| react-force-graph-2d 1.29.2 (memory graph page) | MIT | free |
 | nginx (frontend container) | BSD-2-Clause | free |
 
 ## Development and test dependencies

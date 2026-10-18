@@ -3,6 +3,7 @@ import { api } from '../api/endpoints'
 import type { Handoff, TaskStatus } from '../api/types'
 import { ApiError } from '../api/client'
 import { Badge, Button, Card, Empty, ErrorBox, JsonView, Mono, PageHeader, Select, Spinner, StatusBadge } from '../components/ui'
+import { StaleAlertsCard } from '../components/GraphBits'
 import { useAsync } from '../lib/useAsync'
 import { cx, dateTime, shortId, timeAgo, titleCase } from '../lib/format'
 
@@ -37,6 +38,7 @@ export function TaskBoardPage() {
         }
       />
       <ErrorBox error={tasks.error} />
+      <StaleAlertsCard limit={5} />
       {!tasks.data ? <Spinner /> : (
         <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
           {COLUMNS.map((col) => {

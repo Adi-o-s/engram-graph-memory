@@ -6,6 +6,7 @@ import { LoginPage } from './pages/LoginPage'
 import { OverviewPage } from './pages/OverviewPage'
 import { GuidedDemoPage } from './pages/GuidedDemoPage'
 import { MemoryExplorerPage } from './pages/MemoryExplorerPage'
+import { MemoryGraphPage } from './pages/MemoryGraphPage'
 import { ConversationsPage } from './pages/ConversationsPage'
 import { AgentsPage } from './pages/AgentsPage'
 import { TaskBoardPage } from './pages/TaskBoardPage'
@@ -34,6 +35,7 @@ export function App() {
         <Route path="workspace" element={<WorkspacePage />} />
         <Route path="demo" element={<GuidedDemoPage />} />
         <Route path="memories" element={<MemoryExplorerPage />} />
+        <Route path="graph" element={<MemoryGraphPage />} />
         <Route path="conversations" element={<ConversationsPage />} />
         <Route path="agents" element={<AgentsPage />} />
         <Route path="tasks" element={<TaskBoardPage />} />
