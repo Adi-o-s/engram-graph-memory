@@ -230,6 +230,7 @@ verification reports, not working application code; assign implementation steps 
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): modules, data model, isolation, concurrency, API
 - [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md): installation, configuration, troubleshooting
+- [docs/DEPLOY_VERCEL.md](docs/DEPLOY_VERCEL.md): dashboard on Vercel, backend on a server with HTTPS
 - [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md): a 5-minute hackathon walkthrough
 - [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md): what was run, actual results, known limitations
 - [docs/REQUIREMENTS_FROM_USER.md](docs/REQUIREMENTS_FROM_USER.md): what you need to provide (and what you don't)
