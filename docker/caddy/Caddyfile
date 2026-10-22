@@ -1,0 +1,7 @@
+# HTTPS in front of the Memora API on the backend server. Caddy gets a Let's Encrypt certificate for
+# MEMORA_API_DOMAIN automatically (ports 80 and 443 must be open). With no domain of your own, use
+# <server-ip-with-dashes>.sslip.io, e.g. 203-0-113-5.sslip.io.
+{$MEMORA_API_DOMAIN} {
+	encode gzip
+	reverse_proxy backend:8080
+}

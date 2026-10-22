@@ -1,0 +1,18 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "npm ci --no-audit --no-fund",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://MEMORA_API_HOST/api/:path*" },
+    { "source": "/v3/:path*", "destination": "https://MEMORA_API_HOST/v3/:path*" },
+    { "source": "/swagger-ui/:path*", "destination": "https://MEMORA_API_HOST/swagger-ui/:path*" },
+    { "source": "/swagger-ui.html", "destination": "https://MEMORA_API_HOST/swagger-ui.html" },
+    { "source": "/actuator/health", "destination": "https://MEMORA_API_HOST/actuator/health" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    { "source": "/assets/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }
+  ]
+}

@@ -1,0 +1,95 @@
+# Backend server for a Vercel-hosted dashboard: PostgreSQL + FalkorDB + Spring Boot API behind Caddy (HTTPS).
+# Only Caddy's 80/443 are public. Databases and the API are reachable only inside this Compose network,
+# because Docker-published ports bypass host firewalls such as ufw.
+#   cp .env.example .env   # set the passwords, MEMORA_JWT_SECRET, MEMORA_FALKORDB_PASSWORD, MEMORA_API_DOMAIN
+#   docker compose -f docker-compose.server.yml up -d --build
+# The dashboard is deployed separately to Vercel (frontend/vercel.json proxies /api to MEMORA_API_DOMAIN).
+name: memora-server
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set POSTGRES_SUPERUSER_PASSWORD in .env}
+      MEMORA_DB_NAME: ${MEMORA_DB_NAME:-memora}
+      MEMORA_DB_USER: ${MEMORA_DB_USER:-memora}
+      MEMORA_DB_PASSWORD: ${MEMORA_DB_PASSWORD:?set MEMORA_DB_PASSWORD in .env}
+    volumes:
+      - memora-pgdata:/var/lib/postgresql/data
+      - ./docker/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${MEMORA_DB_NAME:-memora}"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  falkordb:
+    image: falkordb/falkordb:v4.14.6
+    restart: unless-stopped
+    environment:
+      MEMORA_FALKORDB_PASSWORD: ${MEMORA_FALKORDB_PASSWORD:?set MEMORA_FALKORDB_PASSWORD in .env}
+      # AOF persistence plus a password, so nothing on the network can read or wipe the graph.
+      REDIS_ARGS: --appendonly yes --requirepass ${MEMORA_FALKORDB_PASSWORD}
+    volumes:
+      - memora-falkordb:/var/lib/falkordb/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$MEMORA_FALKORDB_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      falkordb:
+        condition: service_healthy
+    environment:
+      MEMORA_FALKORDB_HOST: falkordb
+      MEMORA_FALKORDB_PORT: 6379
+      MEMORA_FALKORDB_PASSWORD: ${MEMORA_FALKORDB_PASSWORD}
+      MEMORA_CONTEXT_RETRIEVAL: ${MEMORA_CONTEXT_RETRIEVAL:-graph}
+      MEMORA_DB_URL: jdbc:postgresql://postgres:5432/${MEMORA_DB_NAME:-memora}
+      MEMORA_DB_USER: ${MEMORA_DB_USER:-memora}
+      MEMORA_DB_PASSWORD: ${MEMORA_DB_PASSWORD}
+      MEMORA_JWT_SECRET: ${MEMORA_JWT_SECRET:?set MEMORA_JWT_SECRET in .env (32+ random characters)}
+      MEMORA_SEED_DEMO_DATA: ${MEMORA_SEED_DEMO_DATA:-true}
+      MEMORA_DEMO_PASSWORD: ${MEMORA_DEMO_PASSWORD:-memora-demo}
+      # The Vercel dashboard proxies /api through its own origin, so CORS is only needed for direct browser calls.
+      MEMORA_CORS_ORIGINS: ${MEMORA_CORS_ORIGINS:-http://localhost:5173}
+      # A shared server: keep the concurrency lab small enough not to starve other users.
+      MEMORA_LAB_MAXTHREADS: ${MEMORA_LAB_MAXTHREADS:-16}
+      MEMORA_LAB_MAXOPERATIONS: ${MEMORA_LAB_MAXOPERATIONS:-2000}
+    mem_limit: ${MEMORA_BACKEND_MEM_LIMIT:-1g}
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf \"GET /actuator/health HTTP/1.0\\r\\n\\r\\n\" >&3 && grep -q UP <&3'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      MEMORA_API_DOMAIN: ${MEMORA_API_DOMAIN:?set MEMORA_API_DOMAIN in .env (e.g. 203-0-113-5.sslip.io)}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - memora-caddy-data:/data
+      - memora-caddy-config:/config
+
+volumes:
+  memora-pgdata:
+  memora-falkordb:
+  memora-caddy-data:
+  memora-caddy-config:
